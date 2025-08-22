@@ -1,0 +1,170 @@
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background: var(--bg-glass);
+  backdrop-filter: var(--blur-lg);
+  border-bottom: 1px solid var(--border-light);
+  padding: var(--space-lg) var(--space-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.title-section {
+  text-align: center;
+}
+
+.app-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(var(--text-2xl), 5vw, var(--text-3xl));
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  letter-spacing: -0.02em;
+}
+
+.title-emoji {
+  font-size: 1.2em;
+  animation: float 3s ease-in-out infinite;
+}
+
+.title-sparkle {
+  font-size: 0.8em;
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+.app-subtitle {
+  margin: var(--space-sm) 0 0 0;
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.app-footer {
+  background: var(--bg-overlay-dark);
+  color: var(--text-subtle);
+  padding: var(--space-lg) var(--space-xl);
+  text-align: center;
+  border-top: 1px solid var(--border-light);
+  backdrop-filter: var(--blur-sm);
+}
+
+.footer-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.footer-content p {
+  margin: 0;
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  opacity: 0.6;
+}
+
+.separator {
+  color: var(--accent-color);
+  font-weight: bold;
+}
+
+/* 애니메이션 */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes sparkle {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .app-header {
+    padding: var(--space-md) var(--space-lg);
+  }
+  
+  .app-title {
+    font-size: var(--text-xl);
+    gap: var(--space-sm);
+  }
+  
+  .app-subtitle {
+    font-size: var(--text-base);
+  }
+  
+  .footer-content p {
+    font-size: 11px;
+  }
+  
+  .footer-links {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-header {
+    padding: var(--space-sm) var(--space-md);
+  }
+  
+  .app-title {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+  
+  .title-emoji,
+  .title-sparkle {
+    font-size: 1.5em;
+  }
+}
