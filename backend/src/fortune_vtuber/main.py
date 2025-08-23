@@ -34,6 +34,14 @@ from .config.database import init_database, close_database, check_database_healt
 # from .core.security import SecurityManager
 from .services import ServiceManager
 
+# Security middleware
+from .security import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    RequestLoggingMiddleware,
+    InputSanitizationMiddleware
+)
+
 
 # Performance Middleware Classes
 class PerformanceMonitoringMiddleware(BaseHTTPMiddleware):
@@ -221,13 +229,22 @@ def create_application() -> FastAPI:
     app.include_router(v2_api_router)
     app.include_router(ws_router)
     
-    # Add performance and monitoring middleware
+    # Add security middleware (in order of execution)
+    app.add_middleware(InputSanitizationMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware) 
+    app.add_middleware(RequestLoggingMiddleware)
+    
+    # Add rate limiting if enabled
+    if settings.security.rate_limit_enabled:
+        app.add_middleware(
+            RateLimitMiddleware,
+            requests_per_minute=settings.security.rate_limit_per_minute
+        )
+    
+    # Add performance and monitoring middleware  
     app.middleware("http")(add_performance_monitoring)
     app.middleware("http")(add_compression_middleware)
     app.middleware("http")(add_cache_headers)
-    # app.middleware("http")(add_security_headers)
-    # app.middleware("http")(add_request_logging)
-    # app.middleware("http")(add_rate_limiting)
     
     # Register exception handlers
     register_exception_handlers(app)
