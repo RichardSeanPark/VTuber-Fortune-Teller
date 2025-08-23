@@ -541,39 +541,8 @@ export class ConfigValidator {
       };
     }
     
-    // WebSocket 연결 테스트
-    try {
-      const ws = new WebSocket(`${config.urls.websocket}/test`);
-      
-      const wsResult = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          ws.close();
-          reject(new Error('WebSocket 연결 시간 초과'));
-        }, 5000);
-        
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          ws.close();
-          resolve({ status: 'connected', error: null });
-        };
-        
-        ws.onerror = (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        };
-      });
-      
-      results.websocket = wsResult;
-    } catch (error) {
-      results.websocket = {
-        status: 'failed',
-        error: error.message
-      };
-    }
-    
     console.group('🌐 네트워크 연결 테스트 결과');
     console.log('API 연결:', results.api);
-    console.log('WebSocket 연결:', results.websocket);
     console.groupEnd();
     
     return { ...config, connectivity: results };
@@ -608,11 +577,6 @@ export class ConfigValidator {
       );
     }
     
-    if (connectivity.connectivity.websocket.status !== 'connected') {
-      report.recommendations.push(
-        'WebSocket 서버가 실행 중인지 확인하세요. 방화벽 설정도 확인해보세요.'
-      );
-    }
     
     console.group('📋 진단 보고서');
     console.log('전체 보고서:', report);

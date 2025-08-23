@@ -196,9 +196,9 @@ class DatabaseManager:
         
         try:
             # Import all models to ensure they're registered
-            from ..models import base, user, fortune, chat, live2d, cache, system
+            from ..models import Base, User, ChatSession, ChatMessage, FortuneSession, TarotCardDB, ZodiacInfo, Live2DModel, ContentCache, SystemSetting, UserAnalytics
             
-            # Create tables using sync engine
+            # Create tables using sync engine with the correct Base
             Base.metadata.create_all(self._sync_engine)
             
             logger.info("Database tables created successfully")
