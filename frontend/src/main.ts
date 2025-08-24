@@ -15,11 +15,16 @@ window.addEventListener(
   'load',
   (): void => {
     // Initialize WebGL and create the application instance
-    if (!LAppDelegate.getInstance().initialize()) {
+    const lappDelegate = LAppDelegate.getInstance();
+    if (!lappDelegate.initialize()) {
       return;
     }
 
-    LAppDelegate.getInstance().run();
+    lappDelegate.run();
+    
+    // Expose LAppDelegate globally for React component access
+    (window as any).lappDelegate = lappDelegate;
+    console.log('[Live2D] LAppDelegate exposed globally');
   },
   { passive: true }
 );

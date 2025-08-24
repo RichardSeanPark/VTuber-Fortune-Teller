@@ -42,7 +42,16 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
           // Debug: Expose service on window for testing
           if (typeof window !== 'undefined') {
             window.live2DService = live2DService;
-            console.log('[Live2DViewer] Live2D service exposed on window for debugging');
+            // characterRef의 디버그 함수를 window에도 노출
+            window.debugLive2D = () => {
+              if (characterRef.current && characterRef.current.debugLive2DStatus) {
+                characterRef.current.debugLive2DStatus();
+              } else {
+                console.warn('debugLive2DStatus not available');
+              }
+            };
+            console.log('[Live2DViewer] Live2D service and debug functions exposed on window');
+            console.log('[Live2DViewer] Use window.debugLive2D() to check Live2D status');
           }
           
           // characterRef에 Live2D 제어 메서드 연결
@@ -50,9 +59,91 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
             changeExpression: (emotion, duration) => live2DService.setExpression(emotion),
             playMotion: (motion, priority) => live2DService.playMotion(motion),
             updateParameters: (parameters) => {
-              console.log('[Live2DViewer] 파라미터 업데이트 (향후 구현):', parameters);
+              console.log('[Live2DViewer] 파라미터 업데이트:', parameters);
+              
+              // HTML Live2D 시스템 접근
+              const lappDelegate = (window as any).lappDelegate;
+              if (!lappDelegate) {
+                console.warn('[Live2DViewer] window.lappDelegate not found');
+                return;
+              }
+              
+              const subdelegates = lappDelegate._subdelegates;
+              if (!subdelegates || subdelegates.getSize() === 0) {
+                console.warn('[Live2DViewer] No subdelegates found');
+                return;
+              }
+              
+              const subdelegate = subdelegates.at(0);
+              const live2DManager = subdelegate.getLive2DManager();
+              
+              if (!live2DManager || !live2DManager._models) {
+                console.warn('[Live2DViewer] No Live2D manager or models');
+                return;
+              }
+              
+              const lappModel = live2DManager._models.at(0);
+              if (!lappModel || !lappModel._model) {
+                console.warn('[Live2DViewer] No model found');
+                return;
+              }
+              
+              // 핵심: WAV Handler의 getRms() 메서드 오버라이드
+              if (lappModel._wavFileHandler && parameters.ParamMouthOpenY !== undefined) {
+                const value = Math.max(0, Math.min(1, parameters.ParamMouthOpenY));
+                
+                // WAV Handler가 우리가 원하는 값을 반환하도록 오버라이드
+                lappModel._wavFileHandler.getRms = function() {
+                  return value;
+                };
+                
+                // 또한 _lastRms도 직접 설정
+                if (lappModel._wavFileHandler._lastRms !== undefined) {
+                  lappModel._wavFileHandler._lastRms = value;
+                }
+                
+                console.log(`[Live2DViewer] WAV Handler RMS overridden to: ${value}`);
+              }
             },
-            getStatus: () => live2DService.getStatus()
+            getStatus: () => live2DService.getStatus(),
+            
+            // 디버깅용 Live2D 상태 확인
+            debugLive2DStatus: () => {
+              console.log('=== Live2D Debug Status ===');
+              const lappDelegate = (window as any).lappDelegate;
+              console.log('LAppDelegate:', lappDelegate);
+              
+              if (lappDelegate && lappDelegate._subdelegates) {
+                console.log('Subdelegates size:', lappDelegate._subdelegates.getSize());
+                const subdelegate = lappDelegate._subdelegates.at(0);
+                console.log('First subdelegate:', subdelegate);
+                
+                if (subdelegate) {
+                  const live2DManager = subdelegate.getLive2DManager();
+                  console.log('Live2DManager:', live2DManager);
+                  
+                  if (live2DManager && live2DManager._models) {
+                    console.log('Models size:', live2DManager._models.getSize());
+                    const model = live2DManager._models.at(0);
+                    console.log('First model:', model);
+                    
+                    if (model) {
+                      console.log('Model _lipSyncIds:', model._lipSyncIds);
+                      console.log('Model _model:', model._model);
+                      
+                      if (model._lipSyncIds) {
+                        console.log('LipSync IDs count:', model._lipSyncIds.getSize());
+                        for (let i = 0; i < model._lipSyncIds.getSize(); i++) {
+                          const id = model._lipSyncIds.at(i);
+                          console.log(`  LipSync ID[${i}]:`, id?.s || id);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              console.log('=== End Debug Status ===');
+            }
           };
         }
         
@@ -138,6 +229,16 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
     // 백엔드 동기화 확인
     checkBackendSync: () => 
       checkBackendSync(),
+    
+    // 립싱크 파라미터 업데이트 (HTML Live2D와 브릿지)
+    updateParameters: (parameters) => {
+      console.log('[Live2DViewer] updateParameters called via ref:', parameters);
+      if (characterRef.current && characterRef.current.updateParameters) {
+        characterRef.current.updateParameters(parameters);
+      } else {
+        console.warn('[Live2DViewer] updateParameters not available on characterRef');
+      }
+    },
     
     // 현재 상태 조회
     getStatus: () => ({

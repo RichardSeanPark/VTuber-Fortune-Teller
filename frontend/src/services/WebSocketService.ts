@@ -65,11 +65,16 @@ class WebSocketService {
           try {
             const data = JSON.parse(event.data);
             console.log('[WebSocket] 메시지 수신:', data);
+            console.log('[WebSocket] 메시지 타입:', data.type);
+            console.log('[WebSocket] 메시지 데이터 구조:', Object.keys(data));
             
             // 메시지 타입에 따른 이벤트 발생
-            if (data.type === 'chat_response') {
-              this.emit('chatResponse', data.data || data);
+            if (data.type === 'chat_response' || data.type === 'text_response') {
+              const responseData = data.data || data;
+              console.log('[WebSocket] chatResponse 이벤트 발생, 데이터:', responseData);
+              this.emit('chatResponse', responseData);
             } else {
+              console.log('[WebSocket] 일반 message 이벤트 발생');
               this.emit('message', data);
             }
           } catch (error) {

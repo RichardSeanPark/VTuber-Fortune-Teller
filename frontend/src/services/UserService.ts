@@ -271,6 +271,13 @@ class UserService {
   }
 
   /**
+   * 현재 사용자 ID 반환
+   */
+  getUserId() {
+    return this.currentUser?.id || null;
+  }
+
+  /**
    * 사용자 로그아웃 (데이터 초기화)
    */
   logout() {

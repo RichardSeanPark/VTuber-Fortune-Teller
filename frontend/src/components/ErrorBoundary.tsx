@@ -25,9 +25,10 @@ class ErrorBoundary extends React.Component {
     console.error('[ErrorBoundary] 에러 캐치:', error);
     console.error('[ErrorBoundary] 에러 정보:', errorInfo);
     
+    // 안전한 에러 정보 설정
     this.setState({
       error: error,
-      errorInfo: errorInfo
+      errorInfo: errorInfo || { componentStack: null }
     });
 
     // 에러 리포팅 서비스에 에러를 보낼 수 있습니다
@@ -63,7 +64,7 @@ class ErrorBoundary extends React.Component {
                   <pre>{this.state.error && this.state.error.toString()}</pre>
                   
                   <h4>스택 트레이스:</h4>
-                  <pre>{this.state.errorInfo.componentStack}</pre>
+                  <pre>{this.state.errorInfo?.componentStack || '컴포넌트 스택 정보를 사용할 수 없습니다.'}</pre>
                 </div>
               </details>
             )}

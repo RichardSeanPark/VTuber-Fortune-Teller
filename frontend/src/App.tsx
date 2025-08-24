@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MainLayout from './components/MainLayout';
 import FortuneSelector from './components/FortuneSelector';
@@ -7,6 +7,7 @@ import FortuneResult from './components/FortuneResult';
 import CardDrawing from './components/CardDrawing';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorBoundary from './components/ErrorBoundary';
+import Live2DViewer from './components/Live2DViewer';
 import FortuneService from './services/FortuneService';
 import UserService from './services/UserService';
 
@@ -24,6 +25,9 @@ const App: React.FC = () => {
   const [fortuneResult, setFortuneResult] = useState<FortuneData | null>(null);
   const [isCardDrawing, setIsCardDrawing] = useState<boolean>(false);
   const [selectedFortune, setSelectedFortune] = useState<string | null>(null);
+  
+  // Live2D 뷰어 참조 (현재는 실제 Live2D 컴포넌트가 없으므로 null)
+  const live2dViewerRef = useRef(null);
 
   useEffect(() => {
     // UserService initializes automatically in constructor
@@ -109,6 +113,15 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <div className="App">
+        {/* Hidden Live2D Viewer for lip-sync bridge */}
+        <div style={{ display: 'none' }}>
+          <Live2DViewer 
+            ref={live2dViewerRef}
+            character="Haru"
+            connectionStatus="connected"
+          />
+        </div>
+        
         <div className="app-container">
           <div className="react-container">
             {/* 카드 선택 화면 또는 메인 화면 */}
@@ -119,7 +132,7 @@ const App: React.FC = () => {
                   <FortuneSelector onFortuneSelect={handleFortuneSelect} />
                 </div>
                 <div className="chat-section">
-                  <ChatInterface />
+                  <ChatInterface live2dViewerRef={live2dViewerRef} />
                 </div>
               </>
             ) : (

@@ -11,16 +11,27 @@
   min-height: 100vh;
 }
 
+.live2d-section {
+  width: 350px;
+  min-width: 350px;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  order: 2; /* Live2D를 오른쪽으로 이동 */
+}
+
 .react-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  width: calc(100vw - 400px);
-  min-width: 350px;
+  width: calc(100vw - 350px);
+  min-width: 400px;
   padding: var(--space-xl);
   overflow-y: auto;
   gap: var(--space-lg);
   position: relative;
+  order: 1; /* React 컨테이너를 왼쪽으로 이동 */
 }
 
 /* Fortune 섹션과 Chat 섹션 레이아웃 */
@@ -57,8 +68,8 @@
 }
 
 .live2d-container {
-  flex: 0 0 400px;
-  width: 400px;
+  flex: 0 0 350px;
+  width: 350px;
   height: 100vh;
   position: relative;
   background: rgba(0, 0, 0, 0.1);
@@ -76,7 +87,7 @@
 .connection-status-bar {
   position: fixed;
   top: var(--space-md);
-  right: calc(400px + var(--space-md));
+  right: calc(350px + var(--space-md));
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -176,12 +187,13 @@
     min-height: 60vh;
   }
   
-  .live2d-container {
+  .live2d-section {
     flex: 0 0 40vh;
     width: 100%;
     height: 40vh;
     border-left: none;
     border-top: 1px solid var(--border-light);
+    order: 2; /* 모바일에서도 Live2D가 아래에 오도록 */
   }
   
   .connection-status-bar {
@@ -194,7 +206,7 @@
     padding: var(--space-md);
   }
   
-  .live2d-container {
+  .live2d-section {
     flex: 0 0 35vh;
     height: 35vh;
   }

@@ -34,6 +34,17 @@ export class ErrorHandler {
       };
     }
 
+    // 브라우저 확장 프로그램 에러 필터링 (무시)
+    if (this.isBrowserExtensionError(error)) {
+      return {
+        type: 'browser_extension',
+        severity: ERROR_SEVERITY.LOW,
+        message: 'Browser extension error (ignored)',
+        shouldIgnore: true,
+        originalError: error
+      };
+    }
+
     // 네트워크 에러
     if (error.name === 'TypeError' && error.message.includes('fetch')) {
       return {
@@ -179,10 +190,53 @@ export class ErrorHandler {
   }
 
   /**
+   * 브라우저 확장 프로그램 에러인지 확인
+   */
+  static isBrowserExtensionError(error) {
+    if (!error) return false;
+    
+    // 에러 메시지 패턴 확인
+    const extensionErrorPatterns = [
+      'The message port closed before a response was received',
+      'Extension context invalidated',
+      'Could not establish connection',
+      'Receiving end does not exist',
+      'Script error',
+      'Non-Error promise rejection captured'
+    ];
+    
+    const errorMessage = error.message || error.toString() || '';
+    const isMessagePortError = extensionErrorPatterns.some(pattern => 
+      errorMessage.includes(pattern)
+    );
+    
+    // 에러 소스 확인 (content.js, background.js 등)
+    const isExtensionScript = error.stack && (
+      error.stack.includes('content.js') ||
+      error.stack.includes('background.js') ||
+      error.stack.includes('extension://')
+    );
+    
+    // 파일 이름 확인
+    const isExtensionFile = error.filename && (
+      error.filename.includes('content.js') ||
+      error.filename.includes('background.js') ||
+      error.filename.includes('extension://')
+    );
+    
+    return isMessagePortError || isExtensionScript || isExtensionFile;
+  }
+
+  /**
    * 에러 로깅
    */
   static log(error, context = {}) {
     const classified = this.classify(error);
+    
+    // 브라우저 확장 프로그램 에러는 무시
+    if (classified.shouldIgnore) {
+      return classified;
+    }
     
     const logData = {
       timestamp: new Date().toISOString(),

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import live2DService from '../services/Live2DService_Reference2_Pure';
+import { LAppLive2DManager } from '../lapplive2dmanager';
 import webSocketService from '../services/WebSocketService';
 import userService from '../services/UserService';
 
