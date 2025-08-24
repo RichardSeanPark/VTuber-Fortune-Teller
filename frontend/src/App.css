@@ -4,11 +4,79 @@
   flex-direction: column;
 }
 
+/* Live2D와 React UI의 분할 레이아웃 */
+.app-container {
+  display: flex;
+  flex: 1;
+  min-height: 100vh;
+}
+
+.react-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 400px);
+  min-width: 350px;
+  padding: var(--space-xl);
+  overflow-y: auto;
+  gap: var(--space-lg);
+  position: relative;
+}
+
+/* Fortune 섹션과 Chat 섹션 레이아웃 */
+.fortune-section {
+  flex: 0 0 auto;
+}
+
+.chat-section {
+  flex: 1;
+  min-height: 350px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-drawing-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 로딩 오버레이 */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+}
+
+.live2d-container {
+  flex: 0 0 400px;
+  width: 400px;
+  height: 100vh;
+  position: relative;
+  background: rgba(0, 0, 0, 0.1);
+  border-left: 1px solid var(--border-light);
+}
+
+#live2d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: transparent;
+}
+
 /* 연결 상태 표시바 - 초컴팩트 디자인 */
 .connection-status-bar {
   position: fixed;
   top: var(--space-md);
-  right: var(--space-md);
+  right: calc(400px + var(--space-md));
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -96,93 +164,39 @@
   }
 }
 
-.reconnect-btn {
-  background: var(--accent-secondary);
-  color: var(--text-primary);
-  border: none;
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: var(--shadow-sm);
-  flex-shrink: 0;
-  margin-left: var(--space-xs);
-}
-
-.reconnect-btn:hover:not(:disabled) {
-  background: var(--accent-color);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.reconnect-btn:disabled {
-  background: var(--bg-overlay-medium);
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-  opacity: 0.5;
-}
-
-.app-container {
-  display: flex;
-  flex: 1;
-  gap: var(--space-xl);
-  padding: var(--space-xl);
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.left-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 350px;
-}
-
-.right-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xl);
-  min-width: 320px;
-}
-
-.fortune-section {
-  flex: 0 0 auto;
-}
-
-.chat-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 350px;
-}
-
-.card-drawing-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 500px;
-}
-
 /* 반응형 디자인 */
 @media (max-width: 1024px) {
   .app-container {
     flex-direction: column;
+  }
+  
+  .react-container {
+    width: 100%;
     padding: var(--space-lg);
-    gap: var(--space-lg);
+    min-height: 60vh;
   }
   
-  .left-panel,
-  .right-panel {
-    min-width: auto;
+  .live2d-container {
+    flex: 0 0 40vh;
+    width: 100%;
+    height: 40vh;
+    border-left: none;
+    border-top: 1px solid var(--border-light);
   }
   
-  .left-panel {
-    min-height: 300px;
+  .connection-status-bar {
+    right: var(--space-md);
+  }
+}
+
+@media (max-width: 768px) {
+  .react-container {
+    padding: var(--space-md);
+  }
+  
+  .live2d-container {
+    flex: 0 0 35vh;
+    height: 35vh;
   }
   
   .connection-status-bar {
@@ -192,42 +206,6 @@
     font-size: 11px;
     min-height: 24px;
     max-width: 100px;
-  }
-}
-
-@media (max-width: 768px) {
-  .app-container {
-    padding: var(--space-md);
-    gap: var(--space-md);
-  }
-  
-  .left-panel {
-    min-height: 250px;
-  }
-  
-  .chat-section {
-    min-height: 280px;
-  }
-  
-  .connection-status-bar {
-    padding: 3px var(--space-sm);
-    font-size: 10px;
-    min-height: 22px;
-    max-width: 90px;
-  }
-  
-  .connection-info {
-    gap: 3px;
-  }
-  
-  .status-indicator {
-    width: 6px;
-    height: 6px;
-  }
-  
-  .reconnect-btn {
-    padding: 2px 6px;
-    font-size: 9px;
   }
 }
 
@@ -241,8 +219,7 @@
     justify-content: center;
   }
   
-  .app-container {
+  .react-container {
     padding: var(--space-sm);
-    gap: var(--space-sm);
   }
 }

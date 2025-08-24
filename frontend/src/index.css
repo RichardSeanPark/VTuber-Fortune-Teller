@@ -164,19 +164,42 @@ code {
   transform: none;
 }
 
-/* 다크/라이트 모드 지원 */
-@media (prefers-color-scheme: light) {
-  :root {
-    --text-overlay: rgba(255, 255, 255, 0.95);
-  }
+/* Legacy 호환성 스타일 */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
 }
 
-/* 고대비 모드 지원 */
-@media (prefers-contrast: high) {
-  :root {
-    --text-secondary: #ffffff;
-    --text-muted: #ffffff;
-    --border-light: rgba(255, 255, 255, 0.5);
-    --border-medium: rgba(255, 255, 255, 0.7);
-  }
+.card {
+  background: var(--bg-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-light);
+}
+
+.button {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%);
+  color: var(--text-primary);
+  border: none;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.button:active {
+  transform: translateY(0);
 }
