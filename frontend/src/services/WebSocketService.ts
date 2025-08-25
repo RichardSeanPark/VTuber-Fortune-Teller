@@ -68,11 +68,41 @@ class WebSocketService {
             console.log('[WebSocket] 메시지 타입:', data.type);
             console.log('[WebSocket] 메시지 데이터 구조:', Object.keys(data));
             
+            // LLM 관련 로그 추가
+            if (data.type === 'llm_processing') {
+              console.log('🤖 [LLM 호출] AI가 운세 생성을 시작합니다:', data.data);
+            } else if (data.type === 'llm_details') {
+              console.log('🔍 [LLM 요청] Cerebras API 호출:', data.data);
+            } else if (data.type === 'llm_response') {
+              console.log('✅ [LLM 응답] AI 응답 수신 완료:', data.data);
+              if (data.data.fortune_content) {
+                console.log('📜 [LLM 메시지] AI 생성 운세:', data.data.fortune_content);
+              }
+              if (data.data.full_result) {
+                console.log('📊 [LLM 전체 결과]:', data.data.full_result);
+              }
+            } else if (data.type === 'llm_complete') {
+              console.log('🎯 [LLM 완료] AI 운세 생성 완료:', data.data);
+            } else if (data.type === 'chat_message') {
+              console.log('💬 [채팅 메시지] 봇 응답 수신 - ChatInterface에서 처리됨:', data.data);
+              // chat_message는 ChatInterface에서 TTS를 직접 처리하므로 여기서는 로그만 출력
+              if (data.data && data.data.audio_data) {
+                console.log('🔊 [TTS] 오디오 데이터 포함됨 (ChatInterface에서 처리):', {
+                  message: data.data.message ? data.data.message.substring(0, 50) + '...' : 'No message',
+                  audioSize: data.data.audio_data.length
+                });
+              }
+            }
+            
             // 메시지 타입에 따른 이벤트 발생
             if (data.type === 'chat_response' || data.type === 'text_response') {
               const responseData = data.data || data;
               console.log('[WebSocket] chatResponse 이벤트 발생, 데이터:', responseData);
               this.emit('chatResponse', responseData);
+            } else if (data.type === 'chat_message') {
+              // chat_message는 ChatInterface에서 직접 처리 (TTS 포함)
+              console.log('[WebSocket] chatMessage 이벤트 발생 - ChatInterface로 위임');
+              this.emit('chatMessage', data.data);
             } else {
               console.log('[WebSocket] 일반 message 이벤트 발생');
               this.emit('message', data);
@@ -185,6 +215,79 @@ class WebSocketService {
       return true;
     }
     return false;
+  }
+
+  // TTS 오디오 재생
+  async playTTSAudio(base64AudioData, message = '') {
+    try {
+      console.log('🎵 [TTS] 오디오 재생 시작:', {
+        audioDataLength: base64AudioData.length,
+        message: message.substring(0, 100) + '...'
+      });
+
+      // Base64를 Blob으로 변환
+      const binaryString = atob(base64AudioData);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const audioBlob = new Blob([bytes], { type: 'audio/mp3' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      console.log('🔄 [TTS] 오디오 Blob 생성 완료:', {
+        blobSize: audioBlob.size,
+        audioUrl: audioUrl.substring(0, 50) + '...'
+      });
+
+      // Audio 객체 생성 및 재생
+      const audio = new Audio(audioUrl);
+      
+      // 오디오 이벤트 리스너
+      audio.onloadstart = () => {
+        console.log('📥 [TTS] 오디오 로딩 시작');
+      };
+      
+      audio.oncanplay = () => {
+        console.log('✅ [TTS] 오디오 재생 준비 완료');
+      };
+      
+      audio.onplay = () => {
+        console.log('▶️ [TTS] 오디오 재생 시작');
+        // Live2D 입모양 애니메이션 시작
+        this.emit('ttsPlayStart', { message, duration: audio.duration });
+      };
+      
+      audio.onended = () => {
+        console.log('⏹️ [TTS] 오디오 재생 완료');
+        // Live2D 입모양 애니메이션 종료
+        this.emit('ttsPlayEnd');
+        // URL 해제
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = (error) => {
+        console.error('❌ [TTS] 오디오 재생 오류:', error);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      // 볼륨 설정 및 재생
+      audio.volume = 0.8;
+      
+      try {
+        await audio.play();
+        console.log('🎶 [TTS] 오디오 재생 시도 성공');
+      } catch (playError) {
+        console.warn('⚠️ [TTS] 자동 재생 실패 (브라우저 정책):', playError.message);
+        console.log('👆 [TTS] 사용자 클릭 후 재생 가능');
+        
+        // 자동 재생 실패 시 사용자에게 알림
+        this.emit('ttsAutoplayBlocked', { audio, message });
+      }
+
+    } catch (error) {
+      console.error('❌ [TTS] 오디오 처리 실패:', error);
+    }
   }
 
   // 연결 상태 확인

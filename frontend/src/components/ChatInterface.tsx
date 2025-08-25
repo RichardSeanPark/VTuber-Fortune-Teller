@@ -20,9 +20,14 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
     return () => {
       // 클린업
       webSocketService.off('chatResponse', handleChatResponse);
+      webSocketService.off('chatMessage', handleChatMessage);
+      webSocketService.off('message', handleWebSocketMessage);
       webSocketService.off('connect', handleWebSocketConnect);
       webSocketService.off('disconnect', handleWebSocketDisconnect);
       webSocketService.off('error', handleWebSocketError);
+      webSocketService.off('ttsPlayStart', handleTTSPlayStart);
+      webSocketService.off('ttsPlayEnd', handleTTSPlayEnd);
+      webSocketService.off('ttsAutoplayBlocked', handleTTSAutoplayBlocked);
     };
   }, []);
 
@@ -174,17 +179,17 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
   // TTS 음성 생성 및 재생
   const generateAndPlayTTS = async (text) => {
     try {
-      console.log('[ChatInterface] TTS API 호출 시작:', text);
+      // 🎤 TTS 입력 메시지 명확히 출력
+      console.log('🎤 [TTS 입력]:', text);
+      console.log('🎤 [TTS 입력 길이]:', text.length);
       
       // 기존 TTS나 립싱크가 진행 중이면 먼저 정리
       if (lipSyncIntervalRef.current) {
-        console.log('[ChatInterface] 기존 TTS/립싱크 진행 중 - 먼저 정리');
         stopLipSyncSimulation();
         
         // 기존 음성도 정지
         if ('speechSynthesis' in window) {
           speechSynthesis.cancel();
-          console.log('[ChatInterface] 기존 음성 재생 정지됨');
         }
         
         // 정리 완료를 위한 짧은 대기
@@ -195,7 +200,7 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
       const userId = userService.getUserId() || 'anonymous';
       
       // Live2D TTS API 호출 (기존 시스템 사용)
-      const response = await fetch('/api/v1/live2d/tts/synthesize', {
+      const response = await fetch('/api/live2d/tts/synthesize', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -215,13 +220,13 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
       }
       
       const result = await response.json();
-      console.log('[ChatInterface] TTS API 응답:', result);
+      console.log('✅ [TTS API] 응답 성공');
       
       if (result.success && result.data.audio_data) {
         
         if (result.data.audio_data === 'dummy_audio_data') {
           // Mock 데이터일 경우 브라우저 TTS 사용
-          console.log('[ChatInterface] Mock TTS 데이터 - 브라우저 TTS로 음성 생성');
+          console.log('🔊 [브라우저 TTS] 시작');
           
           try {
             // AI 응답 텍스트 추출
@@ -242,26 +247,20 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
             
             if (koreanVoice) {
               utterance.voice = koreanVoice;
-              console.log('[ChatInterface] 한국어 음성 선택됨:', koreanVoice.name);
-            } else {
-              console.log('[ChatInterface] 한국어 음성 없음, 기본 음성 사용');
             }
             
-            // 음성 재생 이벤트 - Reference2처럼 단순하게
+            // 음성 재생 이벤트
             utterance.onstart = () => {
-              console.log('[ChatInterface] 음성 재생 시작 → 입 벌림 시작');
               
               // 단순한 립싱크 시뮬레이션 시작 (음성과 동기화)
               startLipSyncSimulation(textToSpeak);
             };
             
             utterance.onend = () => {
-              console.log('[ChatInterface] TTS 음성 재생 완료');
               stopLipSyncSimulation();
             };
             
-            utterance.onerror = (e) => {
-              console.warn('[ChatInterface] 브라우저 TTS 오류:', e);
+            utterance.onerror = () => {
               stopLipSyncSimulation();
             };
             
@@ -349,11 +348,15 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
         }
         
         // Live2D 립싱크 데이터가 있다면 적용
-        if (result.data.lipsync_data && live2dViewerRef?.current) {
+        if (result.data.lip_sync && live2dViewerRef?.current) {
           try {
+            console.log('[ChatInterface] 립싱크 데이터 적용 시작:', result.data.lip_sync);
             // 립싱크 재생 (Live2DViewer에 메서드가 있다면)
             if (typeof live2dViewerRef.current.playLipSync === 'function') {
-              live2dViewerRef.current.playLipSync(result.data.lipsync_data);
+              live2dViewerRef.current.playLipSync(result.data.lip_sync);
+              console.log('[ChatInterface] playLipSync 메서드 호출 완료');
+            } else {
+              console.warn('[ChatInterface] playLipSync 메서드가 없음. Live2DViewer 메서드:', Object.getOwnPropertyNames(live2dViewerRef.current));
             }
           } catch (error) {
             console.warn('[ChatInterface] 립싱크 재생 실패:', error);
@@ -379,12 +382,166 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
     }
   };
 
+  // overall_description만 추출하는 함수
+  const extractOverallDescription = (text) => {
+    if (!text) return text;
+    
+    try {
+      // 이미 짧은 메시지인 경우 (마크다운이 아닌 경우) 그대로 반환
+      if (text.length < 200 && !text.includes('```') && !text.includes('###')) {
+        console.log('✅ [이미 추출된 메시지] 그대로 사용:', text);
+        return text;
+      }
+      
+      // overall_description 패턴 찾기 (마크다운인 경우)
+      const match = text.match(/"overall_description"\s*:\s*"([^"]+)"/);
+      if (match) {
+        console.log('✅ [추출 성공] overall_description:', match[1]);
+        return match[1];
+      }
+      
+      // JSON 블록에서 추출 시도
+      const jsonMatch = text.match(/```json\s*\n([\s\S]*?)\n```/);
+      if (jsonMatch) {
+        try {
+          const jsonData = JSON.parse(jsonMatch[1]);
+          if (jsonData.overall_description) {
+            console.log('✅ [JSON 추출 성공] overall_description:', jsonData.overall_description);
+            return jsonData.overall_description;
+          }
+        } catch (e) {
+          console.warn('❌ [JSON 파싱 실패]:', e);
+        }
+      }
+      
+      console.warn('❌ [추출 실패] overall_description을 찾을 수 없음');
+      return '운세 정보를 확인해보세요.';
+      
+    } catch (error) {
+      console.error('❌ [추출 오류]:', error);
+      return '운세 정보를 확인해보세요.';
+    }
+  };
+
+  // chat_message 전용 처리 함수 (사주 메시지와 동일한 처리 방식)
+  const handleChatMessage = async (data) => {
+    console.log('💬 [ChatInterface] chat_message 수신:', data);
+    
+    if (!data) return;
+    
+    const content = data.message || data.content || '';
+    const audioData = data.audio_data || null;
+    
+    if (!content) {
+      console.warn('💬 [ChatInterface] chat_message에서 메시지 내용이 없음');
+      return;
+    }
+    
+    // AI 메시지를 채팅창에 추가
+    const aiMessage = {
+      id: Date.now(),
+      type: 'ai',
+      content: content,
+      timestamp: new Date(),
+      hasAudio: !!audioData
+    };
+    
+    // 타이핑 애니메이션 시작
+    setIsTyping(true);
+    
+    // AI 메시지를 채팅에 추가
+    setMessages(prev => {
+      const newMessages = [...prev, aiMessage];
+      saveChatHistory(newMessages);
+      return newMessages;
+    });
+    
+    // 타이핑 애니메이션 후 TTS 재생 (사주 메시지와 동일한 방식)
+    setTimeout(async () => {
+      setIsTyping(false);
+      
+      // Live2D 반응 추가
+      if (live2dViewerRef?.current && content) {
+        try {
+          await live2dViewerRef.current.analyzeAndReact(content);
+          console.log('💬 [ChatInterface] Live2D 반응 완료');
+        } catch (error) {
+          console.warn('💬 [ChatInterface] Live2D 반응 실패:', error);
+        }
+      }
+      
+      // TTS 음성 생성 및 재생 (사주 메시지와 동일한 방식)
+      if (content) {
+        try {
+          console.log('💬 [ChatInterface] chat_message TTS 생성 시작:', content);
+          await generateAndPlayTTS(content);
+          console.log('💬 [ChatInterface] chat_message TTS 재생 완료');
+        } catch (error) {
+          console.error('💬 [ChatInterface] chat_message TTS 재생 실패:', error);
+        }
+      }
+      
+      console.log('💬 [ChatInterface] chat_message 처리 완료');
+    }, 1000); // 사주 메시지와 동일한 타이밍
+  };
+
+  // WebSocket 메시지 처리 (fortune_result 등)
+  const handleWebSocketMessage = async (data) => {
+    if (data.type === 'fortune_result') {
+      // 프론트엔드에서 직접 overall_description 추출
+      let ttsMessage = extractOverallDescription(data.data.tts_text || data.data.character_message || data.data.fortune_content);
+      let displayMessage = data.data.character_message || data.data.tts_text;
+      
+      // 🔍 추출된 메시지 확인
+      console.log('🔍 [메시지 추출] TTS용:', ttsMessage);
+      console.log('🔍 [메시지 추출] 표시용:', displayMessage);
+      
+      // AI 메시지를 채팅창에 추가
+      const aiMessage = {
+        id: Date.now(),
+        type: 'ai',
+        content: displayMessage,
+        timestamp: new Date(),
+        isTyping: false
+      };
+      
+      // 타이핑 애니메이션 시작
+      setIsTyping(true);
+      
+      // AI 메시지를 채팅에 추가
+      setMessages(prev => {
+        const newMessages = [...prev, aiMessage];
+        saveChatHistory(newMessages);
+        return newMessages;
+      });
+      
+      // 타이핑 애니메이션 후 TTS 재생
+      setTimeout(async () => {
+        setIsTyping(false);
+        
+        // TTS 음성 생성 및 재생 (추출된 메시지 사용)
+        if (ttsMessage) {
+          try {
+            await generateAndPlayTTS(ttsMessage);
+          } catch (error) {
+            console.error('❌ [TTS 오류]:', error);
+          }
+        }
+      }, 1000);
+    }
+  };
+
   // WebSocket 이벤트 리스너 설정
   const setupWebSocketListeners = () => {
     webSocketService.on('chatResponse', handleChatResponse);
+    webSocketService.on('chatMessage', handleChatMessage);   // chat_message 처리
+    webSocketService.on('message', handleWebSocketMessage);  // 추가된 메시지 핸들러
     webSocketService.on('connect', handleWebSocketConnect);
     webSocketService.on('disconnect', handleWebSocketDisconnect);
     webSocketService.on('error', handleWebSocketError);
+    webSocketService.on('ttsPlayStart', handleTTSPlayStart); // TTS 재생 시작
+    webSocketService.on('ttsPlayEnd', handleTTSPlayEnd);     // TTS 재생 종료
+    webSocketService.on('ttsAutoplayBlocked', handleTTSAutoplayBlocked); // TTS 자동재생 차단
   };
 
   // WebSocket 연결 성공
@@ -413,6 +570,121 @@ const ChatInterface = ({ onMessageSend, connectionStatus, live2dViewerRef }) => 
     }
     
     addSystemMessage(errorMessage);
+  };
+
+  // TTS 재생 시작 이벤트 처리
+  const handleTTSPlayStart = (data) => {
+    console.log('🎵 [ChatInterface] TTS 재생 시작:', data);
+    
+    // Live2D 입모양 애니메이션 시작
+    if (live2dViewerRef?.current && data?.message) {
+      try {
+        // 간단한 립싱크 시뮬레이션 생성
+        const message = data.message;
+        const duration = data.duration || 3.0; // 기본 3초
+        
+        // 메시지 길이 기반으로 입모양 데이터 생성
+        const lipSyncData = generateLipSyncData(message, duration);
+        
+        // Live2DViewer의 playLipSync 메서드 호출
+        if (typeof live2dViewerRef.current.playLipSync === 'function') {
+          live2dViewerRef.current.playLipSync(lipSyncData);
+          console.log('🎵 [ChatInterface] Live2D 입모양 애니메이션 시작');
+        } else {
+          // fallback: 단순한 립싱크 시뮬레이션
+          startLipSyncSimulation(message);
+        }
+      } catch (error) {
+        console.warn('🎵 [ChatInterface] Live2D 입모양 애니메이션 시작 실패:', error);
+        // fallback: 단순한 립싱크 시뮬레이션
+        if (data?.message) {
+          startLipSyncSimulation(data.message);
+        }
+      }
+    }
+  };
+
+  // TTS 재생 종료 이벤트 처리
+  const handleTTSPlayEnd = () => {
+    console.log('🎵 [ChatInterface] TTS 재생 종료');
+    
+    // 립싱크 시뮬레이션 정리
+    stopLipSyncSimulation();
+    
+    // Live2D 입을 자연스럽게 닫기
+    if (live2dViewerRef?.current && typeof live2dViewerRef.current.updateParameters === 'function') {
+      live2dViewerRef.current.updateParameters({
+        ParamMouthOpenY: 0.0,
+        ParamMouthForm: 0.0,
+        ParamMouthOpenX: 0.0
+      });
+      console.log('🎵 [ChatInterface] Live2D 입 닫기 완료');
+    }
+  };
+
+  // TTS 자동재생 차단 이벤트 처리
+  const handleTTSAutoplayBlocked = (data) => {
+    console.warn('🎵 [ChatInterface] TTS 자동재생 차단됨:', data);
+    
+    // 사용자에게 클릭을 유도하는 시스템 메시지 표시
+    addSystemMessage('🔊 음성을 재생하려면 화면을 클릭해주세요. (브라우저 자동재생 정책)');
+    
+    // 클릭 이벤트 리스너 추가 (일회성)
+    const handleUserClick = () => {
+      if (data?.audio) {
+        try {
+          data.audio.play();
+          console.log('🎵 [ChatInterface] 사용자 클릭으로 TTS 재생 시작');
+          
+          // 리스너 제거
+          document.removeEventListener('click', handleUserClick);
+        } catch (error) {
+          console.error('🎵 [ChatInterface] 사용자 클릭 TTS 재생 실패:', error);
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleUserClick, { once: true });
+  };
+
+  // 메시지 기반 립싱크 데이터 생성 함수
+  const generateLipSyncData = (message, duration) => {
+    if (!message || !duration) return null;
+    
+    // 간단한 립싱크 데이터 생성 (실제 TTS와 동기화되지는 않음)
+    const mouthShapes = [];
+    const frameRate = 16; // 60fps를 위한 16ms 간격
+    const totalFrames = Math.floor((duration * 1000) / frameRate);
+    
+    for (let i = 0; i < totalFrames; i++) {
+      const timestamp = (i * frameRate) / 1000.0;
+      
+      // 간단한 사인파 기반 입모양 생성
+      const baseIntensity = 0.3 + (Math.sin(i * 0.3) * 0.4); // 0.0-0.7 범위
+      const randomVariation = Math.random() * 0.2; // 0.0-0.2 랜덤
+      
+      const mouthOpenY = Math.max(0, Math.min(1, baseIntensity + randomVariation));
+      const mouthForm = Math.random() * 0.3; // 입 모양 변화
+      
+      mouthShapes.push([
+        timestamp,
+        {
+          ParamMouthOpenY: mouthOpenY,
+          ParamMouthForm: mouthForm,
+          ParamMouthOpenX: mouthOpenY * 0.5,
+          ParamMouthUp: Math.random() * 0.2,
+          ParamMouthDown: Math.random() * 0.2
+        }
+      ]);
+    }
+    
+    console.log('🎵 [ChatInterface] 립싱크 데이터 생성:', {
+      message: message.substring(0, 50) + '...',
+      duration,
+      frameCount: mouthShapes.length
+    });
+    
+    return { mouth_shapes: mouthShapes };
   };
 
   // 채팅 응답 처리

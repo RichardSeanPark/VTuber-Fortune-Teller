@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from ..models.live2d import Live2DModel, Live2DSessionModel
 from ..models.chat import ChatSession
 from .cache_service import CacheService
+from ..live2d.emotion_bridge import emotion_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -73,126 +74,199 @@ class MotionType(str, Enum):
 class Live2DCharacterConfig:
     """Live2D 캐릭터 설정"""
     
-    CHARACTER_NAME = "미라"
-    MODEL_PATH = "/static/live2d/mira/mira.model3.json"
+    CHARACTER_NAME = "마오 프로"
+    MODEL_PATH = "/static/live2d/mao_pro/runtime/mao_pro.model3.json"
     
-    # 감정 타입별 표정 매핑
+    # 감정 타입별 표정 매핑 (실제 Live2D 모델과 연동)
     EMOTIONS = {
         EmotionType.NEUTRAL: {
             "id": 0,
             "name": "중립",
             "description": "기본 평온한 표정",
-            "parameter": "ParamEyeLOpen",
-            "value": 1.0,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_01.exp3.json",
+            "parameters": {
+                "ParamEyeLOpen": 1.0,
+                "ParamEyeROpen": 1.0,
+                "ParamEyeLSmile": 0.0,
+                "ParamEyeRSmile": 0.0,
+                "ParamMouthForm": 0.0,
+                "ParamBrowLY": 0.0,
+                "ParamBrowRY": 0.0
+            },
+            "fade_in_time": 0.5,
+            "fade_out_time": 0.5,
             "duration": 0
         },
         EmotionType.JOY: {
             "id": 1,
             "name": "기쁨",
             "description": "밝고 즐거운 표정",
-            "parameter": "ParamMouthForm",
-            "value": 1.0,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_02.exp3.json",
+            "parameters": {
+                "ParamEyeLSmile": 1.0,
+                "ParamEyeRSmile": 1.0,
+                "ParamMouthForm": 1.0,
+                "ParamMouthUp": 0.8,
+                "ParamCheek": 0.5
+            },
+            "fade_in_time": 0.3,
+            "fade_out_time": 0.8,
             "duration": 3000
         },
         EmotionType.THINKING: {
             "id": 2,
             "name": "사색",
             "description": "생각에 잠긴 표정",
-            "parameter": "ParamEyeLOpen",
-            "value": 0.6,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_03.exp3.json",
+            "parameters": {
+                "ParamEyeLOpen": 0.6,
+                "ParamEyeROpen": 0.6,
+                "ParamEyeBallY": -0.3,
+                "ParamBrowLY": -0.2,
+                "ParamBrowRY": -0.2
+            },
+            "fade_in_time": 0.8,
+            "fade_out_time": 0.5,
             "duration": 5000
         },
         EmotionType.CONCERN: {
             "id": 3,
             "name": "걱정",
             "description": "걱정스러운 표정",
-            "parameter": "ParamBrowLY",
-            "value": -0.5,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_04.exp3.json",
+            "parameters": {
+                "ParamBrowLY": -0.5,
+                "ParamBrowRY": -0.5,
+                "ParamBrowLAngle": -0.3,
+                "ParamBrowRAngle": 0.3,
+                "ParamMouthDown": 0.4
+            },
+            "fade_in_time": 0.4,
+            "fade_out_time": 0.6,
             "duration": 4000
         },
         EmotionType.SURPRISE: {
             "id": 4,
             "name": "놀람",
             "description": "깜짝 놀란 표정",
-            "parameter": "ParamEyeLOpen",
-            "value": 1.2,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_05.exp3.json",
+            "parameters": {
+                "ParamEyeLOpen": 1.4,
+                "ParamEyeROpen": 1.4,
+                "ParamBrowLY": 0.5,
+                "ParamBrowRY": 0.5,
+                "ParamA": 0.8
+            },
+            "fade_in_time": 0.1,
+            "fade_out_time": 0.3,
             "duration": 2000
         },
         EmotionType.MYSTICAL: {
             "id": 5,
             "name": "신비",
             "description": "신비로운 운세 해석 중",
-            "parameter": "ParamEyeLOpen",
-            "value": 0.8,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_06.exp3.json",
+            "parameters": {
+                "ParamEyeLOpen": 0.8,
+                "ParamEyeROpen": 0.8,
+                "ParamEyeLForm": 0.3,
+                "ParamEyeRForm": 0.3,
+                "ParamEyeEffect": 0.7
+            },
+            "fade_in_time": 1.0,
+            "fade_out_time": 0.8,
             "duration": 6000
         },
         EmotionType.COMFORT: {
             "id": 6,
             "name": "위로",
             "description": "따뜻하고 위로하는 표정",
-            "parameter": "ParamMouthForm",
-            "value": 0.7,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_07.exp3.json",
+            "parameters": {
+                "ParamEyeLSmile": 0.6,
+                "ParamEyeRSmile": 0.6,
+                "ParamMouthForm": 0.7,
+                "ParamMouthUp": 0.3,
+                "ParamCheek": 0.2
+            },
+            "fade_in_time": 0.6,
+            "fade_out_time": 0.4,
             "duration": 4000
         },
         EmotionType.PLAYFUL: {
             "id": 7,
             "name": "장난",
             "description": "장난스럽고 귀여운 표정",
-            "parameter": "ParamMouthForm",
-            "value": 1.2,
+            "expression_file": "/static/live2d/mao_pro/runtime/expressions/exp_08.exp3.json",
+            "parameters": {
+                "ParamEyeLSmile": 0.8,
+                "ParamEyeRSmile": 0.8,
+                "ParamMouthForm": 1.2,
+                "ParamMouthUp": 1.0,
+                "ParamEyeBallX": 0.2,
+                "ParamCheek": 0.8
+            },
+            "fade_in_time": 0.3,
+            "fade_out_time": 0.5,
             "duration": 3000
         }
     }
     
-    # 모션 타입별 애니메이션 매핑
+    # 모션 타입별 애니메이션 매핑 (실제 Live2D 모델과 연동)
     MOTIONS = {
         MotionType.GREETING: {
             "id": "greeting",
             "name": "인사",
             "description": "반갑게 인사하는 모션",
-            "file": "motions/greeting.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/mtn_01.motion3.json",
             "duration": 3000,
-            "loop": False
+            "loop": False,
+            "priority": "normal"
         },
         MotionType.CARD_DRAW: {
             "id": "card_draw",
             "name": "카드 뽑기",
             "description": "타로 카드를 뽑는 모션",
-            "file": "motions/card_draw.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/mtn_02.motion3.json",
             "duration": 4000,
-            "loop": False
+            "loop": False,
+            "priority": "high"
         },
         MotionType.CRYSTAL_GAZE: {
             "id": "crystal_gaze",
             "name": "수정구 응시",
             "description": "수정구를 들여다보는 모션",
-            "file": "motions/crystal_gaze.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/mtn_03.motion3.json",
             "duration": 5000,
-            "loop": True
+            "loop": True,
+            "priority": "normal"
         },
         MotionType.BLESSING: {
             "id": "blessing",
             "name": "축복",
             "description": "축복을 내리는 모션",
-            "file": "motions/blessing.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/mtn_04.motion3.json",
             "duration": 4000,
-            "loop": False
+            "loop": False,
+            "priority": "high"
         },
         MotionType.SPECIAL_READING: {
             "id": "special_reading",
             "name": "특별 해석",
             "description": "사주나 특별한 운세 해석 모션",
-            "file": "motions/special_reading.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/special_01.motion3.json",
             "duration": 6000,
-            "loop": False
+            "loop": False,
+            "priority": "high"
         },
         MotionType.THINKING_POSE: {
             "id": "thinking_pose",
             "name": "생각하는 자세",
             "description": "깊게 생각하는 자세",
-            "file": "motions/thinking_pose.motion3.json",
+            "file": "/static/live2d/mao_pro/runtime/motions/special_02.motion3.json",
             "duration": 5000,
-            "loop": True
+            "loop": True,
+            "priority": "low"
         }
     }
     
@@ -514,11 +588,139 @@ class Live2DService:
     
     async def react_to_fortune(self, db: Session, session_id: str,
                              fortune_result: Dict[str, Any]) -> Dict[str, Any]:
-        """운세 결과에 따른 자동 반응"""
+        """운세 결과에 따른 지능형 자동 반응"""
+        try:
+            # Active session 확보
+            session_data = await self._ensure_active_session(db, session_id)
+            live2d_session = session_data["live2d_session"]
+            
+            # 새로운 감정 엔진을 통한 지능형 감정 계산
+            emotion_result = emotion_bridge.calculate_emotion(
+                fortune_result, 
+                session_id, 
+                live2d_session.user_uuid
+            )
+            
+            # 계산된 감정/모션으로 상태 설정
+            result = await self.set_advanced_state(
+                db, session_id, emotion_result
+            )
+            
+            # 추가 정보 포함
+            result["fortune_reaction"] = {
+                "fortune_type": fortune_result.get("fortune_type", "daily"),
+                "grade": fortune_result.get("overall_fortune", {}).get("grade") if fortune_result.get("fortune_type") == "daily" else None,
+                "message": emotion_result.get("message", ""),
+                "auto_triggered": True,
+                "emotion_engine": "advanced",
+                "confidence_score": emotion_result.get("confidence_score", 0.0),
+                "context_tags": emotion_result.get("context_tags", [])
+            }
+            
+            logger.info(f"Advanced fortune reaction triggered for session {session_id}: {fortune_result.get('fortune_type', 'daily')}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error reacting to fortune: {e}")
+            # 폴백: 기본 반응 시스템 사용
+            return await self._react_to_fortune_fallback(db, session_id, fortune_result)
+    
+    async def set_advanced_state(self, db: Session, session_id: str, 
+                               emotion_result: Dict[str, Any]) -> Dict[str, Any]:
+        """감정 엔진 결과를 기반으로 한 고급 상태 설정"""
+        try:
+            # Active session 확보
+            session_data = await self._ensure_active_session(db, session_id)
+            live2d_session = session_data["live2d_session"]
+            
+            primary_emotion = emotion_result.get('primary_emotion', 'neutral')
+            secondary_emotion = emotion_result.get('secondary_emotion')
+            motion = emotion_result.get('motion', 'thinking_pose')
+            intensity = emotion_result.get('intensity', 0.6)
+            parameters = emotion_result.get('parameters', {})
+            duration = emotion_result.get('duration', 4000)
+            fade_timing = emotion_result.get('fade_timing', {'fadeIn': 0.5, 'fadeOut': 0.5})
+            
+            # Live2D 세션 상태 업데이트
+            live2d_session.current_emotion = primary_emotion
+            live2d_session.current_motion = motion
+            live2d_session.last_emotion_change = datetime.now()
+            live2d_session.last_motion_change = datetime.now()
+            
+            # 데이터베이스 업데이트
+            live2d_session.updated_at = datetime.now()
+            db.commit()
+            
+            # 세션 상태 업데이트
+            session_data["last_updated"] = datetime.now()
+            
+            # WebSocket 브로드캐스트 (고급 데이터 포함)
+            await self._broadcast_advanced_state_change(session_id, {
+                "primary_emotion": primary_emotion,
+                "secondary_emotion": secondary_emotion,
+                "motion": motion,
+                "intensity": intensity,
+                "parameters": parameters,
+                "duration": duration,
+                "fade_timing": fade_timing,
+                "message": emotion_result.get("message", ""),
+                "context_tags": emotion_result.get("context_tags", []),
+                "confidence_score": emotion_result.get("confidence_score", 0.0)
+            })
+            
+            logger.info(f"Advanced state set: {primary_emotion} (intensity: {intensity}) + {motion} for session {session_id}")
+            return await self._get_session_state(live2d_session)
+            
+        except Exception as e:
+            logger.error(f"Error setting advanced state: {e}")
+            db.rollback()
+            raise
+    
+    async def set_live2d_parameters(self, db: Session, session_id: str,
+                                  parameters: Dict[str, float],
+                                  duration: int = 1000,
+                                  fade_in: float = 0.5,
+                                  fade_out: float = 0.5) -> Dict[str, Any]:
+        """Live2D 파라미터 직접 제어"""
+        try:
+            # Active session 확보
+            session_data = await self._ensure_active_session(db, session_id)
+            live2d_session = session_data["live2d_session"]
+            
+            # 파라미터 유효성 검증
+            validated_params = self._validate_live2d_parameters(parameters)
+            
+            # 세션 상태 업데이트
+            session_data["last_updated"] = datetime.now()
+            
+            # WebSocket을 통한 실시간 파라미터 전송
+            await self._broadcast_parameter_change(session_id, {
+                "parameters": validated_params,
+                "duration": duration,
+                "fade_in": fade_in,
+                "fade_out": fade_out,
+                "timestamp": datetime.now().isoformat()
+            })
+            
+            logger.info(f"Live2D parameters set for session {session_id}: {len(validated_params)} params")
+            return {
+                "session_id": session_id,
+                "parameters_applied": validated_params,
+                "duration": duration,
+                "fade_timing": {"fade_in": fade_in, "fade_out": fade_out}
+            }
+            
+        except Exception as e:
+            logger.error(f"Error setting Live2D parameters: {e}")
+            raise
+    
+    async def _react_to_fortune_fallback(self, db: Session, session_id: str,
+                                       fortune_result: Dict[str, Any]) -> Dict[str, Any]:
+        """기본 운세 반응 시스템 (폴백)"""
         try:
             fortune_type = fortune_result.get("fortune_type", "daily")
             
-            # 운세별 반응 설정 가져오기
+            # 기본 반응 설정 가져오기
             if fortune_type in ["daily"]:
                 overall_grade = fortune_result.get("overall_fortune", {}).get("grade", "normal")
                 reaction_config = self.config.FORTUNE_REACTIONS.get(overall_grade, 
@@ -539,20 +741,77 @@ class Live2DService:
                 message
             )
             
-            # 추가 정보 포함
+            # 폴백 정보 포함
             result["fortune_reaction"] = {
                 "fortune_type": fortune_type,
                 "grade": fortune_result.get("overall_fortune", {}).get("grade") if fortune_type == "daily" else None,
                 "message": message,
-                "auto_triggered": True
+                "auto_triggered": True,
+                "emotion_engine": "fallback"
             }
             
-            logger.info(f"Fortune reaction triggered for session {session_id}: {fortune_type}")
+            logger.info(f"Fallback fortune reaction triggered for session {session_id}")
             return result
             
         except Exception as e:
-            logger.error(f"Error reacting to fortune: {e}")
+            logger.error(f"Error in fallback fortune reaction: {e}")
             raise
+    
+    def _validate_live2d_parameters(self, parameters: Dict[str, float]) -> Dict[str, float]:
+        """Live2D 파라미터 유효성 검증 및 정규화"""
+        validated = {}
+        
+        # 알려진 파라미터들과 그 범위
+        parameter_ranges = {
+            # 눈 관련
+            'ParamEyeLOpen': (0.0, 2.0),
+            'ParamEyeROpen': (0.0, 2.0),
+            'ParamEyeLSmile': (0.0, 1.0),
+            'ParamEyeRSmile': (0.0, 1.0),
+            'ParamEyeLForm': (-1.0, 1.0),
+            'ParamEyeRForm': (-1.0, 1.0),
+            'ParamEyeBallX': (-1.0, 1.0),
+            'ParamEyeBallY': (-1.0, 1.0),
+            'ParamEyeEffect': (0.0, 1.0),
+            
+            # 눈썹 관련
+            'ParamBrowLY': (-1.0, 1.0),
+            'ParamBrowRY': (-1.0, 1.0),
+            'ParamBrowLX': (-1.0, 1.0),
+            'ParamBrowRX': (-1.0, 1.0),
+            'ParamBrowLAngle': (-1.0, 1.0),
+            'ParamBrowRAngle': (-1.0, 1.0),
+            'ParamBrowLForm': (-1.0, 1.0),
+            'ParamBrowRForm': (-1.0, 1.0),
+            
+            # 입 관련 (모음)
+            'ParamA': (0.0, 1.0),
+            'ParamI': (0.0, 1.0),
+            'ParamU': (0.0, 1.0),
+            'ParamE': (0.0, 1.0),
+            'ParamO': (0.0, 1.0),
+            
+            # 입 표현
+            'ParamMouthForm': (0.0, 1.5),
+            'ParamMouthUp': (0.0, 1.0),
+            'ParamMouthDown': (0.0, 1.0),
+            'ParamMouthAngry': (0.0, 1.0),
+            'ParamMouthAngryLine': (0.0, 1.0),
+            
+            # 기타
+            'ParamCheek': (0.0, 1.0),
+        }
+        
+        for param_name, value in parameters.items():
+            if param_name in parameter_ranges:
+                min_val, max_val = parameter_ranges[param_name]
+                # 값을 허용 범위로 제한
+                validated[param_name] = max(min_val, min(max_val, float(value)))
+            else:
+                # 알 수 없는 파라미터는 -1.0 ~ 1.0 범위로 제한
+                validated[param_name] = max(-1.0, min(1.0, float(value)))
+        
+        return validated
     
     async def get_session_status(self, db: Session, session_id: str) -> Dict[str, Any]:
         """세션 상태 조회"""
@@ -713,6 +972,60 @@ class Live2DService:
                 await websocket.send_text(json.dumps(message, ensure_ascii=False))
             except Exception as e:
                 logger.warning(f"Failed to send to websocket: {e}")
+                disconnected_websockets.add(websocket)
+        
+        # 끊어진 연결 정리
+        for websocket in disconnected_websockets:
+            await self.unregister_websocket(session_id, websocket)
+    
+    async def _broadcast_advanced_state_change(self, session_id: str, data: Dict[str, Any]):
+        """고급 상태 변경 브로드캐스트"""
+        if session_id not in self.websocket_connections:
+            return
+        
+        message = {
+            "type": "live2d_advanced_action",
+            "data": {
+                "session_id": session_id,
+                "timestamp": datetime.now().isoformat(),
+                **data
+            }
+        }
+        
+        # 연결된 모든 WebSocket에 브로드캐스트
+        disconnected_websockets = set()
+        for websocket in self.websocket_connections[session_id]:
+            try:
+                await websocket.send_text(json.dumps(message, ensure_ascii=False))
+            except Exception as e:
+                logger.warning(f"Failed to send advanced state to websocket: {e}")
+                disconnected_websockets.add(websocket)
+        
+        # 끊어진 연결 정리
+        for websocket in disconnected_websockets:
+            await self.unregister_websocket(session_id, websocket)
+    
+    async def _broadcast_parameter_change(self, session_id: str, data: Dict[str, Any]):
+        """Live2D 파라미터 변경 브로드캐스트"""
+        if session_id not in self.websocket_connections:
+            return
+        
+        message = {
+            "type": "live2d_parameter_update",
+            "data": {
+                "session_id": session_id,
+                "timestamp": datetime.now().isoformat(),
+                **data
+            }
+        }
+        
+        # 연결된 모든 WebSocket에 브로드캐스트
+        disconnected_websockets = set()
+        for websocket in self.websocket_connections[session_id]:
+            try:
+                await websocket.send_text(json.dumps(message, ensure_ascii=False))
+            except Exception as e:
+                logger.warning(f"Failed to send parameter update to websocket: {e}")
                 disconnected_websockets.add(websocket)
         
         # 끊어진 연결 정리

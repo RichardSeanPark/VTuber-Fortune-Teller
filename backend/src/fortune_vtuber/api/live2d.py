@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field, validator
 from ..config.database import get_db
 from ..services.live2d_service import Live2DService
 from ..services.live2d_service import EmotionType, MotionType
+from ..live2d.tts_integration import tts_service, TTSRequest, EmotionalTone
+from ..live2d.resource_optimizer import resource_optimizer, DeviceType
 
 logger = logging.getLogger(__name__)
 
@@ -595,3 +597,350 @@ async def live2d_health_check():
                 }
             }
         )
+
+
+# Advanced Live2D API Endpoints
+
+class TTSRequestModel(BaseModel):
+    """TTS 요청 모델"""
+    session_id: str = Field(..., description="세션 ID")
+    text: str = Field(..., min_length=1, max_length=500, description="합성할 텍스트")
+    emotion: Optional[str] = Field(None, description="감정 톤")
+    language: Optional[str] = Field("ko-KR", description="언어 설정")
+    voice_profile: Optional[str] = Field("ko_female_default", description="음성 프로파일")
+    enable_lipsync: Optional[bool] = Field(True, description="립싱크 활성화")
+
+
+class ParameterUpdateRequest(BaseModel):
+    """Live2D 파라미터 업데이트 요청 모델"""
+    session_id: str = Field(..., description="세션 ID")
+    parameters: Dict[str, float] = Field(..., description="Live2D 파라미터")
+    duration: Optional[int] = Field(1000, ge=100, le=10000, description="지속 시간 (ms)")
+    fade_in: Optional[float] = Field(0.5, ge=0.0, le=2.0, description="페이드 인 시간")
+    fade_out: Optional[float] = Field(0.5, ge=0.0, le=2.0, description="페이드 아웃 시간")
+
+
+class DeviceOptimizationRequest(BaseModel):
+    """디바이스 최적화 요청 모델"""
+    device_type: str = Field(..., description="디바이스 타입 (desktop/tablet/mobile/low_end)")
+    screen_width: Optional[int] = Field(1920, ge=320, le=4096)
+    screen_height: Optional[int] = Field(1080, ge=240, le=2160)
+    memory_gb: Optional[int] = Field(8, ge=1, le=64)
+    cpu_cores: Optional[int] = Field(4, ge=1, le=32)
+    user_preferences: Optional[Dict[str, Any]] = Field({})
+
+
+@router.post("/tts/synthesize",
+            summary="TTS 음성 합성",
+            description="텍스트를 음성으로 합성하고 립싱크 데이터를 함께 제공합니다.")
+async def synthesize_tts(
+    request: TTSRequestModel,
+    db: Session = Depends(get_db)
+):
+    """TTS 음성 합성"""
+    try:
+        # 음성 프로파일 선택
+        voice_profile = tts_service.get_voice_profile_for_emotion(
+            request.emotion or "neutral", 
+            request.language
+        )
+        
+        # 감정 톤 변환
+        emotion_tone = None
+        if request.emotion:
+            try:
+                emotion_tone = EmotionalTone(request.emotion)
+            except ValueError:
+                emotion_tone = EmotionalTone.CALM
+        
+        # TTS 요청 생성
+        tts_request = TTSRequest(
+            text=request.text,
+            voice_profile=voice_profile,
+            emotion_tone=emotion_tone,
+            session_id=request.session_id,
+            enable_lipsync=request.enable_lipsync
+        )
+        
+        # 새 TTS 시스템 사용 (Live2D 통합 TTS)
+        from ..tts import Live2DTTSRequest, live2d_tts_manager
+        
+        # Live2D TTS 요청 생성
+        live2d_request = Live2DTTSRequest(
+            text=request.text,
+            user_id="default",
+            session_id=request.session_id or f"session_{datetime.now().timestamp()}",
+            language=request.language,
+            voice=voice_profile.voice_name if voice_profile else "ko-KR-SunHiNeural",
+            emotion=None,  # 감정 매핑 필요시 추가
+            speed=1.0,
+            pitch=1.0, 
+            volume=1.0,
+            enable_lipsync=request.enable_lipsync,
+            enable_expressions=True,
+            enable_motions=True
+        )
+        
+        # Live2D TTS로 음성 합성 실행
+        live2d_result = await live2d_tts_manager.generate_speech_with_animation(live2d_request)
+        tts_result = live2d_result.tts_result
+        
+        # numpy 타입 변환을 위한 import
+        from ..utils import fix_tts_result_for_json, create_safe_api_response
+        
+        # TTS 결과의 numpy 타입들을 안전하게 변환
+        tts_result = fix_tts_result_for_json(tts_result)
+        
+        # Base64 인코딩을 위한 import
+        import base64
+        
+        # 결과 반환
+        result_data = {
+            "audio_data": base64.b64encode(tts_result.audio_data).decode('utf-8'),  # Base64 인코딩
+            "audio_format": tts_result.audio_format,
+            "duration": float(tts_result.duration),  # numpy.float32 방지
+            "cached": bool(tts_result.cached),
+            "generation_time": float(tts_result.generation_time)  # numpy.float32 방지
+        }
+        
+        # 새 TTS 시스템에서는 lip-sync 데이터가 live2d_result에 있음
+        if hasattr(tts_result, 'lip_sync_data') and tts_result.lip_sync_data:
+            result_data["lip_sync"] = {
+                "phonemes": tts_result.lip_sync_data.phonemes,
+                "mouth_shapes": tts_result.lip_sync_data.mouth_shapes,
+                "total_duration": float(tts_result.duration)
+            }
+        elif hasattr(live2d_result, 'tts_result') and hasattr(live2d_result.tts_result, 'lip_sync_data') and live2d_result.tts_result.lip_sync_data:
+            # Live2D 결과에서 lip-sync 데이터 추출
+            lip_sync_data = live2d_result.tts_result.lip_sync_data
+            result_data["lip_sync"] = {
+                "phonemes": lip_sync_data.phonemes if lip_sync_data else [],
+                "mouth_shapes": lip_sync_data.mouth_shapes if lip_sync_data else [],
+                "total_duration": float(tts_result.duration)
+            }
+        
+        # 전체 응답을 안전하게 생성
+        response_data = {
+            "success": True,
+            "data": result_data,
+            "metadata": {
+                "request_id": f"tts_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat(),
+                "session_id": request.session_id
+            }
+        }
+        
+        # JSON 직렬화 안전성 확보
+        return create_safe_api_response(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error in TTS synthesis: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 합성 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/parameters/update",
+            summary="Live2D 파라미터 직접 제어",
+            description="Live2D 캐릭터의 파라미터를 직접 제어합니다.")
+async def update_live2d_parameters(
+    request: ParameterUpdateRequest,
+    db: Session = Depends(get_db)
+):
+    """Live2D 파라미터 직접 제어"""
+    try:
+        result = await live2d_service.set_live2d_parameters(
+            db,
+            request.session_id,
+            request.parameters,
+            request.duration,
+            request.fade_in,
+            request.fade_out
+        )
+        
+        return {
+            "success": True,
+            "data": result,
+            "metadata": {
+                "request_id": f"param_update_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat(),
+                "parameters_count": len(request.parameters)
+            }
+        }
+        
+    except ValueError as e:
+        logger.warning(f"Invalid parameter update request: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating Live2D parameters: {e}")
+        raise HTTPException(status_code=500, detail=f"파라미터 업데이트 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/optimize/device",
+            summary="디바이스별 최적화",
+            description="사용자 디바이스에 맞춰 Live2D 모델을 최적화합니다.")
+async def optimize_for_device(request: DeviceOptimizationRequest):
+    """디바이스별 최적화"""
+    try:
+        # 디바이스 타입 변환
+        device_type = DeviceType(request.device_type)
+        
+        # 최적화 설정 생성
+        optimized_config = resource_optimizer.get_optimized_config(
+            device_type, 
+            request.user_preferences
+        )
+        
+        return {
+            "success": True,
+            "data": {
+                "device_type": device_type.value,
+                "optimized_config": optimized_config,
+                "device_info": {
+                    "screen_resolution": f"{request.screen_width}x{request.screen_height}",
+                    "memory_gb": request.memory_gb,
+                    "cpu_cores": request.cpu_cores
+                }
+            },
+            "metadata": {
+                "request_id": f"optimize_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat(),
+                "optimization_level": optimized_config["model_config"]["quality_level"]
+            }
+        }
+        
+    except ValueError as e:
+        logger.warning(f"Invalid device optimization request: {e}")
+        raise HTTPException(status_code=400, detail=f"잘못된 디바이스 타입입니다: {request.device_type}")
+    except Exception as e:
+        logger.error(f"Error in device optimization: {e}")
+        raise HTTPException(status_code=500, detail=f"디바이스 최적화 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/optimize/performance/{model_name}",
+           summary="성능 메트릭 조회",
+           description="특정 모델의 성능 메트릭을 조회합니다.")
+async def get_performance_metrics(model_name: str):
+    """성능 메트릭 조회"""
+    try:
+        metrics = resource_optimizer.get_performance_metrics(model_name)
+        
+        return {
+            "success": True,
+            "data": {
+                "model_name": model_name,
+                "metrics": metrics
+            },
+            "metadata": {
+                "request_id": f"metrics_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"성능 메트릭 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/preload/model/{model_name}",
+            summary="모델 사전 로딩",
+            description="지정된 모델을 디바이스에 맞춰 사전 로딩합니다.")
+async def preload_model(
+    model_name: str,
+    device_type: str = Query("desktop", description="디바이스 타입")
+):
+    """모델 사전 로딩"""
+    try:
+        device_enum = DeviceType(device_type)
+        
+        # 모델 사전 로딩 실행
+        preload_result = await resource_optimizer.preload_critical_resources(model_name, device_enum)
+        
+        return {
+            "success": True,
+            "data": {
+                "model_name": model_name,
+                "device_type": device_type,
+                "preload_result": preload_result,
+                "resources_loaded": {
+                    "model": bool(preload_result["model"]),
+                    "textures_count": len(preload_result["textures"]),
+                    "motions_count": len(preload_result["motions"]),
+                    "expressions_count": len(preload_result["expressions"])
+                }
+            },
+            "metadata": {
+                "request_id": f"preload_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except ValueError as e:
+        logger.warning(f"Invalid model preload request: {e}")
+        raise HTTPException(status_code=400, detail=f"잘못된 요청입니다: {str(e)}")
+    except FileNotFoundError as e:
+        logger.warning(f"Model not found: {e}")
+        raise HTTPException(status_code=404, detail=f"모델을 찾을 수 없습니다: {model_name}")
+    except Exception as e:
+        logger.error(f"Error preloading model: {e}")
+        raise HTTPException(status_code=500, detail=f"모델 사전 로딩 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.get("/tts/cache/stats",
+           summary="TTS 캐시 통계",
+           description="TTS 시스템의 캐시 사용 통계를 조회합니다.")
+async def get_tts_cache_stats():
+    """TTS 캐시 통계"""
+    try:
+        cache_stats = tts_service.get_cache_stats()
+        
+        return {
+            "success": True,
+            "data": cache_stats,
+            "metadata": {
+                "request_id": f"tts_stats_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting TTS cache stats: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 통계 조회 중 오류가 발생했습니다: {str(e)}")
+
+
+@router.post("/tts/cache/preload",
+            summary="자주 사용하는 문구 사전 로딩",
+            description="자주 사용되는 TTS 문구들을 사전에 합성하여 캐시합니다.")
+async def preload_common_phrases(
+    phrases: List[str] = Body(..., description="사전 로딩할 문구 목록"),
+    voice_profile: str = Body("ko_female_default", description="음성 프로파일")
+):
+    """자주 사용하는 문구 사전 로딩"""
+    try:
+        if len(phrases) > 50:
+            raise HTTPException(status_code=400, detail="한 번에 최대 50개 문구까지 사전 로딩할 수 있습니다")
+        
+        preload_results = await tts_service.preload_common_phrases(phrases, voice_profile)
+        
+        successful_count = sum(1 for success in preload_results.values() if success)
+        failed_count = len(phrases) - successful_count
+        
+        return {
+            "success": True,
+            "data": {
+                "preload_results": preload_results,
+                "summary": {
+                    "total_phrases": len(phrases),
+                    "successful": successful_count,
+                    "failed": failed_count,
+                    "success_rate": f"{(successful_count/len(phrases)*100):.1f}%"
+                }
+            },
+            "metadata": {
+                "request_id": f"tts_preload_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat(),
+                "voice_profile": voice_profile
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error preloading TTS phrases: {e}")
+        raise HTTPException(status_code=500, detail=f"TTS 문구 사전 로딩 중 오류가 발생했습니다: {str(e)}")

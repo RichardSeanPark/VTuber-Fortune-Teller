@@ -74,7 +74,23 @@ def setup_environment(args):
     
     if env_file.exists():
         print(f"Loading environment from: {env_file}")
-        # Environment variables will be loaded by pydantic-settings
+        # Explicitly load .env file using python-dotenv
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(env_file, override=True)
+            print(f"✅ Environment variables loaded from {env_file}")
+            
+            # Verify critical environment variables are loaded
+            cerebras_key = os.environ.get("CEREBRAS_API_KEY")
+            if cerebras_key:
+                print(f"✅ CEREBRAS_API_KEY loaded: {cerebras_key[:10]}...{cerebras_key[-4:]}")
+            else:
+                print("⚠️ CEREBRAS_API_KEY not found in environment")
+                
+        except ImportError:
+            print("⚠️ python-dotenv not available, using pydantic-settings fallback")
+        except Exception as e:
+            print(f"❌ Failed to load .env file: {e}")
     else:
         print(f"Environment file not found: {env_file}")
         if args.env_file != ".env":

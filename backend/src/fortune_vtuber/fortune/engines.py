@@ -52,6 +52,21 @@ class FortuneEngineBase(ABC):
     def __init__(self):
         self.fortune_type = None
         self.cache_duration = 86400  # 24시간
+    
+    def _safe_date_format(self, date_obj) -> str:
+        """날짜 객체를 안전하게 문자열로 변환"""
+        if isinstance(date_obj, str):
+            # 이미 문자열인 경우 그대로 반환
+            return date_obj
+        elif hasattr(date_obj, 'isoformat'):
+            # date 또는 datetime 객체인 경우
+            return date_obj.isoformat()
+        elif hasattr(date_obj, 'date'):
+            # datetime 객체에서 date 부분만 추출
+            return date_obj.date().isoformat()
+        else:
+            # 기타 경우 문자열로 변환
+            return str(date_obj)
         
     @abstractmethod
     async def generate_fortune(
@@ -73,7 +88,7 @@ class FortuneEngineBase(ABC):
         key_data = {
             "type": self.fortune_type.value if self.fortune_type else "",
             "date": date_target.isoformat() if date_target else "",
-            "birth_date": context.birth_date.isoformat() if context.birth_date else "",
+            "birth_date": self._safe_date_format(context.birth_date) if context.birth_date else "",
             "zodiac": context.zodiac_sign.value if context.zodiac_sign else "",
             "params": additional_params or {}
         }
@@ -102,7 +117,7 @@ class FortuneEngineBase(ABC):
         """개인화된 랜덤 생성기"""
         seed_string = ""
         if context.birth_date:
-            seed_string += context.birth_date.isoformat()
+            seed_string += self._safe_date_format(context.birth_date)
         if context.zodiac_sign:
             seed_string += context.zodiac_sign.value
         seed_string += seed_extra
@@ -1243,14 +1258,37 @@ class FortuneEngineFactory:
     """운세 엔진 팩토리"""
     
     @staticmethod
-    def create_engine(fortune_type: FortuneType) -> FortuneEngineBase:
+    def create_engine(fortune_type: FortuneType, use_cerebras: bool = False, cerebras_config=None) -> FortuneEngineBase:
         """운세 타입에 따른 엔진 생성"""
         # Handle both model FortuneType and EngineFortuneType
         if hasattr(fortune_type, 'value'):
             type_value = fortune_type.value
         else:
             type_value = str(fortune_type)
+        
+        # Cerebras 엔진 사용 시
+        if use_cerebras and cerebras_config:
+            try:
+                from .cerebras_engine import (
+                    CerebrasDailyFortuneEngine,
+                    CerebrasTarotFortuneEngine, 
+                    CerebrasZodiacFortuneEngine,
+                    CerebrasSajuFortuneEngine
+                )
+                
+                if type_value in ["daily", FortuneType.DAILY.value]:
+                    return CerebrasDailyFortuneEngine(cerebras_config)
+                elif type_value in ["tarot", FortuneType.TAROT.value]:
+                    return CerebrasTarotFortuneEngine(cerebras_config)
+                elif type_value in ["zodiac", FortuneType.ZODIAC.value]:
+                    return CerebrasZodiacFortuneEngine(cerebras_config)
+                elif type_value in ["oriental", "saju", FortuneType.ORIENTAL.value]:
+                    return CerebrasSajuFortuneEngine(cerebras_config)
+            except ImportError:
+                # Cerebras SDK가 없으면 기본 엔진 사용
+                pass
             
+        # 기본 엔진 사용
         if type_value in ["daily", FortuneType.DAILY.value]:
             return DailyFortuneEngine()
         elif type_value in ["tarot", FortuneType.TAROT.value]:

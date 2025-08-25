@@ -112,6 +112,7 @@ class SajuElement(BaseModel):
 
 class FortuneResult(BaseModel):
     """Complete fortune result model"""
+    fortune_id: Optional[str] = None  # UUID for external reference
     fortune_type: FortuneType
     date: str  # ISO format date
     overall_fortune: FortuneCategory
@@ -127,6 +128,8 @@ class FortuneResult(BaseModel):
     question_type: Optional[str] = None
     live2d_emotion: Optional[str] = None
     live2d_motion: Optional[str] = None
+    content: Optional[Dict[str, Any]] = None  # For backward compatibility
+    created_at: Optional[datetime] = None  # Creation timestamp
 
 
 class TarotSuit(str, Enum):
@@ -756,7 +759,7 @@ class TarotReadingResponse(BaseModel):
     created_at: datetime
 
 
-class FortuneResult(BaseModel):
+class FortuneResultResponse(BaseModel):
     """Fortune result model for API responses"""
     
     fortune_id: str

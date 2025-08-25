@@ -41,7 +41,7 @@ async def websocket_chat_endpoint(
             logger.info("ChatService initialized in WebSocket endpoint")
         
         # WebSocket 연결 처리
-        await chat_service.connect_websocket(session_id, websocket, db)
+        await chat_service.connect(websocket, session_id)
         
         logger.info(f"WebSocket chat connected: {session_id}")
         
@@ -49,11 +49,15 @@ async def websocket_chat_endpoint(
         while True:
             try:
                 # 메시지 수신
+                logger.info(f"[WebSocket] Waiting for message from {session_id}")
                 data = await websocket.receive_text()
+                logger.info(f"[WebSocket] Received raw data from {session_id}: {data[:200]}...")
                 
                 try:
                     message_data = json.loads(data)
-                except json.JSONDecodeError:
+                    logger.info(f"[WebSocket] Parsed JSON from {session_id}: {message_data}")
+                except json.JSONDecodeError as e:
+                    logger.error(f"[WebSocket] JSON decode error from {session_id}: {e}, data: {data}")
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "data": {
@@ -63,8 +67,27 @@ async def websocket_chat_endpoint(
                     }, ensure_ascii=False))
                     continue
                 
+                # 메시지 구조 호환성 처리
+                if "message" in message_data and "data" not in message_data:
+                    # 프론트엔드 구조: { "type": "chat_message", "message": "내용" }
+                    # 백엔드 구조로 변환: { "type": "chat_message", "data": { "message": "내용" } }
+                    logger.info(f"[WebSocket] Converting frontend message structure for {session_id}")
+                    converted_data = {
+                        "type": message_data.get("type"),
+                        "data": {
+                            "message": message_data.get("message")
+                        }
+                    }
+                    # timestamp나 기타 필드가 있으면 보존
+                    if "timestamp" in message_data:
+                        converted_data["timestamp"] = message_data["timestamp"]
+                    message_data = converted_data
+                    logger.info(f"[WebSocket] Converted message structure: {message_data}")
+
                 # 메시지 처리
+                logger.info(f"[WebSocket] Processing message from {session_id}: {message_data.get('type', 'unknown')}")
                 await chat_service.handle_message(db, session_id, websocket, message_data)
+                logger.info(f"[WebSocket] Message processing completed for {session_id}")
                 
             except WebSocketDisconnect:
                 logger.info(f"WebSocket chat disconnected: {session_id}")
@@ -90,7 +113,7 @@ async def websocket_chat_endpoint(
     finally:
         # 연결 해제 처리
         if chat_service is not None:
-            await chat_service.disconnect_websocket(session_id, websocket)
+            await chat_service.disconnect(websocket, session_id)
 
 
 @router.websocket("/live2d/{session_id}")
@@ -192,8 +215,8 @@ async def websocket_status_endpoint(
         
         # 초기 상태 전송
         try:
-            # Chat 서비스 상태
-            chat_history = await chat_service.get_chat_history(db, session_id, 5)
+            # Chat 서비스 상태 (간단한 정보만 사용)
+            chat_history = []  # TODO: get_chat_history 메서드 구현 필요
             
             # Live2D 서비스 상태
             live2d_service = Live2DService()
@@ -203,9 +226,9 @@ async def websocket_status_endpoint(
             status_data = {
                 "session_id": session_id,
                 "chat_status": {
-                    "active": session_id in chat_service.active_connections,
+                    "active": chat_service and session_id in chat_service.active_connections,
                     "recent_messages": len(chat_history),
-                    "connections": len(chat_service.active_connections.get(session_id, set()))
+                    "connections": len(chat_service.active_connections.get(session_id, set())) if chat_service else 0
                 },
                 "live2d_status": live2d_status,
                 "timestamp": chat_history[0]["created_at"] if chat_history else None
@@ -233,15 +256,15 @@ async def websocket_status_endpoint(
                         
                         if message_type == "request_status":
                             # 상태 업데이트 요청 처리
-                            chat_history = await chat_service.get_chat_history(db, session_id, 5)
+                            chat_history = []  # TODO: get_chat_history 메서드 구현 필요
                             live2d_status = await live2d_service.get_session_status(db, session_id)
                             
                             status_data = {
                                 "session_id": session_id,
                                 "chat_status": {
-                                    "active": session_id in chat_service.active_connections,
+                                    "active": chat_service and session_id in chat_service.active_connections,
                                     "recent_messages": len(chat_history),
-                                    "connections": len(chat_service.active_connections.get(session_id, set()))
+                                    "connections": len(chat_service.active_connections.get(session_id, set())) if chat_service else 0
                                 },
                                 "live2d_status": live2d_status,
                                 "timestamp": chat_history[0]["created_at"] if chat_history else None
@@ -287,8 +310,8 @@ async def websocket_health_endpoint(websocket: WebSocket):
         health_data = {
             "service": "websocket",
             "status": "healthy",
-            "active_chat_sessions": len(chat_service.active_connections),
-            "total_connections": sum(len(connections) for connections in chat_service.active_connections.values()),
+            "active_chat_sessions": len(chat_service.active_connections) if chat_service else 0,
+            "total_connections": sum(len(connections) for connections in chat_service.active_connections.values()) if chat_service else 0,
             "timestamp": asyncio.get_event_loop().time()
         }
         
@@ -316,8 +339,8 @@ async def websocket_health_endpoint(websocket: WebSocket):
             except asyncio.TimeoutError:
                 # 헬스 체크 업데이트
                 health_data["timestamp"] = asyncio.get_event_loop().time()
-                health_data["active_chat_sessions"] = len(chat_service.active_connections)
-                health_data["total_connections"] = sum(len(connections) for connections in chat_service.active_connections.values())
+                health_data["active_chat_sessions"] = len(chat_service.active_connections) if chat_service else 0
+                health_data["total_connections"] = sum(len(connections) for connections in chat_service.active_connections.values()) if chat_service else 0
                 
                 await websocket.send_text(json.dumps({
                     "type": "health_update",
@@ -334,7 +357,7 @@ async def websocket_health_endpoint(websocket: WebSocket):
 # Message broadcasting utility (for future use)
 async def broadcast_to_session(session_id: str, message: Dict[str, Any]):
     """특정 세션의 모든 연결에 메시지 브로드캐스트"""
-    if session_id not in chat_service.active_connections:
+    if not chat_service or session_id not in chat_service.active_connections:
         return
     
     message_text = json.dumps(message, ensure_ascii=False)
@@ -349,11 +372,14 @@ async def broadcast_to_session(session_id: str, message: Dict[str, Any]):
     
     # 끊어진 연결 정리
     for websocket in disconnected_websockets:
-        await chat_service.disconnect_websocket(session_id, websocket)
+        await chat_service.disconnect(websocket, session_id)
 
 
 async def broadcast_to_all(message: Dict[str, Any]):
     """모든 활성 연결에 메시지 브로드캐스트"""
+    if not chat_service:
+        return
+        
     message_text = json.dumps(message, ensure_ascii=False)
     
     for session_id in list(chat_service.active_connections.keys()):

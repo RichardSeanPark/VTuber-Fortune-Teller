@@ -15,21 +15,33 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from fastapi import HTTPException
 
-logger = logging.getLogger(__name__)
+try:
+    from ..config.logging_config import get_logger, log_security_event_deduplicated
+    logger = get_logger(__name__)
+except ImportError:
+    # Fallback to standard logging if new system not available
+    logger = logging.getLogger(__name__)
 
 
 class SecurityLogger:
-    """보안 이벤트 로깅 시스템"""
+    """보안 이벤트 로깅 시스템 - 새로운 통합 로깅 시스템 사용"""
     
     def __init__(self):
-        self.security_logger = logging.getLogger("security")
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        self.security_logger.addHandler(handler)
-        self.security_logger.setLevel(logging.INFO)
+        try:
+            # 새로운 통합 로깅 시스템 사용
+            self.security_logger = get_logger("security")
+        except NameError:
+            # Fallback: 기존 방식
+            self.security_logger = logging.getLogger("security")
+            if not self.security_logger.handlers:
+                handler = logging.StreamHandler()
+                formatter = logging.Formatter(
+                    '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
+                )
+                handler.setFormatter(formatter)
+                self.security_logger.addHandler(handler)
+                self.security_logger.setLevel(logging.INFO)
+                self.security_logger.propagate = False
     
     def log_rate_limit_exceeded(self, client_ip: str, endpoint: str, request_count: int):
         """Rate limit 초과 로깅"""
@@ -55,11 +67,16 @@ class SecurityLogger:
         )
     
     def log_security_event(self, event_type: str, client_ip: str, details: Dict):
-        """일반 보안 이벤트 로깅"""
-        self.security_logger.info(
-            f"Security event - Type: {event_type}, IP: {client_ip}, "
-            f"Details: {json.dumps(details, ensure_ascii=False)}"
-        )
+        """일반 보안 이벤트 로깅 - 중복 방지 적용"""
+        try:
+            # 새로운 중복 방지 로깅 시스템 사용
+            log_security_event_deduplicated(event_type, client_ip, details)
+        except NameError:
+            # Fallback: 기존 방식
+            self.security_logger.info(
+                f"Security event - Type: {event_type}, IP: {client_ip}, "
+                f"Details: {json.dumps(details, ensure_ascii=False)}"
+            )
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

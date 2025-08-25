@@ -59,7 +59,6 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
             changeExpression: (emotion, duration) => live2DService.setExpression(emotion),
             playMotion: (motion, priority) => live2DService.playMotion(motion),
             updateParameters: (parameters) => {
-              console.log('[Live2DViewer] 파라미터 업데이트:', parameters);
               
               // HTML Live2D 시스템 접근
               const lappDelegate = (window as any).lappDelegate;
@@ -102,7 +101,6 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
                   lappModel._wavFileHandler._lastRms = value;
                 }
                 
-                console.log(`[Live2DViewer] WAV Handler RMS overridden to: ${value}`);
               }
             },
             getStatus: () => live2DService.getStatus(),
@@ -238,6 +236,96 @@ const Live2DViewer = React.forwardRef(({ character, connectionStatus, onEmotionC
       } else {
         console.warn('[Live2DViewer] updateParameters not available on characterRef');
       }
+    },
+
+    // 립싱크 애니메이션 재생
+    playLipSync: (lipSyncData) => {
+      console.log('[Live2DViewer] playLipSync 시작:', lipSyncData);
+      
+      if (!lipSyncData || !lipSyncData.mouth_shapes) {
+        console.warn('[Live2DViewer] 유효하지 않은 립싱크 데이터');
+        return;
+      }
+
+      const mouthShapes = lipSyncData.mouth_shapes;
+      let currentIndex = 0;
+      const startTime = Date.now();
+
+      const playFrame = () => {
+        if (currentIndex >= mouthShapes.length) {
+          // 애니메이션 완료 - 부드럽게 입을 닫기
+          if (characterRef.current && characterRef.current.updateParameters) {
+            // 부드러운 페이드아웃 효과를 위해 점진적으로 입을 닫기
+            let fadeStep = 0;
+            const fadeInterval = setInterval(() => {
+              const fadeAmount = 1.0 - (fadeStep * 0.2); // 5단계로 페이드
+              if (fadeAmount <= 0 || !characterRef.current) {
+                clearInterval(fadeInterval);
+                if (characterRef.current && characterRef.current.updateParameters) {
+                  characterRef.current.updateParameters({
+                    ParamMouthOpenY: 0.0,
+                    ParamMouthForm: 0.0,
+                    ParamMouthOpenX: 0.0
+                  });
+                }
+                return;
+              }
+              
+              if (characterRef.current.updateParameters) {
+                characterRef.current.updateParameters({
+                  ParamMouthOpenY: fadeAmount * 0.8,     // 더 큰 시작값에서 페이드
+                  ParamMouthForm: fadeAmount * 0.6,      // 더 큰 시작값에서 페이드
+                  ParamMouthOpenX: fadeAmount * 0.6,     // 더 큰 시작값에서 페이드
+                  ParamMouthUp: fadeAmount * 0.5,
+                  ParamMouthDown: fadeAmount * 0.5
+                });
+              }
+              fadeStep++;
+            }, 50); // 50ms 간격으로 페이드
+          }
+          console.log('[Live2DViewer] 립싱크 애니메이션 완료 - 부드럽게 입 닫기');
+          return;
+        }
+
+        const frame = mouthShapes[currentIndex];
+        const [timestamp, parameters] = frame;
+        const elapsed = (Date.now() - startTime) / 1000.0;
+
+        // 현재 시간에 맞는 프레임인지 확인
+        if (elapsed >= timestamp) {
+          if (characterRef.current && characterRef.current.updateParameters) {
+            // 입모양을 아주 크게 만들기 위해 파라미터 값 대폭 증폭 (5-8배)
+            const amplifiedParameters = {
+              ...parameters,
+              ParamMouthOpenY: (parameters.ParamMouthOpenY || 0) * 8.0,  // 세로 입 벌림 8배 증폭
+              ParamMouthForm: (parameters.ParamMouthForm || 0) * 5.0,    // 입 모양 변화 5배 증폭
+              ParamMouthOpenX: (parameters.ParamMouthOpenX || 0) * 6.0,  // 가로 입 벌림 6배 증폭
+              // Mao 모델의 추가 입모양 파라미터들도 크게 증폭
+              ParamMouthUp: (parameters.ParamMouthUp || 0) * 7.0,
+              ParamMouthDown: (parameters.ParamMouthDown || 0) * 7.0,
+              ParamMouthAngry: (parameters.ParamMouthAngry || 0) * 5.0,
+              ParamMouthAngryLine: (parameters.ParamMouthAngryLine || 0) * 5.0
+            };
+            
+            // Live2D 파라미터 클램핑 (최대값을 1.5로 확장하여 더 극적인 표현 허용)
+            Object.keys(amplifiedParameters).forEach(key => {
+              if (key.startsWith('ParamMouth')) {
+                if (amplifiedParameters[key] > 1.5) amplifiedParameters[key] = 1.5;
+                if (amplifiedParameters[key] < -1.5) amplifiedParameters[key] = -1.5;
+              }
+            });
+            
+            characterRef.current.updateParameters(amplifiedParameters);
+          }
+          currentIndex++;
+        }
+
+        // 더 부드러운 애니메이션을 위한 타이머 설정 (60fps = 16ms)
+        setTimeout(playFrame, 16);
+      };
+
+      // 애니메이션 시작
+      playFrame();
     },
     
     // 현재 상태 조회

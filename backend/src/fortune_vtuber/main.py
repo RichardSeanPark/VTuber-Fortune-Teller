@@ -22,17 +22,22 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
-logger = logging.getLogger(__name__)
 import uvicorn
 
 # Configuration and database
 from .config.settings import get_settings
 from .config.database import init_database, close_database, check_database_health
+from .config.logging_config import setup_logging, get_logger
 
 # Initialize modules 
-# from .core.logging import setup_logging
 # from .core.security import SecurityManager
 from .services import ServiceManager
+
+# Performance optimization modules
+from .core.performance_monitor import performance_monitor
+from .core.memory_manager import memory_manager
+from .core.async_optimizer import async_optimizer
+from .core.websocket_optimizer import websocket_optimizer
 
 # Security middleware
 from .security import (
@@ -66,7 +71,8 @@ class PerformanceMonitoringMiddleware(BaseHTTPMiddleware):
         
         # Log slow requests (>200ms)
         if process_time > 0.2:
-            logger.warning(f"Slow request: {request.method} {request.url.path} took {process_time:.3f}s")
+            # Use print for now since logger may not be initialized yet
+            print(f"Slow request: {request.method} {request.url.path} took {process_time:.3f}s")
         
         return response
 
@@ -135,9 +141,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan management"""
     settings = get_settings()
     
+    # Initialize logging system first
+    setup_logging(settings.environment.lower())
+    logger = get_logger(__name__)
+    
     # Startup
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Environment: {settings.environment}")
+    logger.info("Logging system initialized with unified configuration")
     
     try:
         # Initialize database
@@ -155,6 +166,16 @@ async def lifespan(app: FastAPI):
         app.state.service_manager = service_manager
         logger.info("Service manager initialized")
         
+        # Initialize performance optimization systems
+        await performance_monitor.start_monitoring()
+        logger.info("Performance monitoring started")
+        
+        await memory_manager.start_monitoring()
+        logger.info("Memory monitoring started")
+        
+        await async_optimizer.start()
+        logger.info("Async optimizer started")
+        
         logger.info("Application startup completed successfully")
         
     except Exception as e:
@@ -168,6 +189,25 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application...")
     
     try:
+        # Shutdown performance optimization systems
+        try:
+            await async_optimizer.stop()
+            logger.info("Async optimizer stopped")
+        except Exception as e:
+            logger.error(f"Error stopping async optimizer: {e}")
+        
+        try:
+            await memory_manager.stop_monitoring()
+            logger.info("Memory monitoring stopped")
+        except Exception as e:
+            logger.error(f"Error stopping memory manager: {e}")
+        
+        try:
+            await performance_monitor.stop_monitoring()
+            logger.info("Performance monitoring stopped")  
+        except Exception as e:
+            logger.error(f"Error stopping performance monitor: {e}")
+        
         # Cleanup services
         if hasattr(app.state, 'service_manager'):
             await app.state.service_manager.shutdown()
@@ -264,7 +304,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         """Handle HTTP exceptions"""
-        logger.warning(f"HTTP {exc.status_code}: {exc.detail} - {request.url}")
+        # Use print or try to get logger safely
+        try:
+            logger = get_logger(__name__)
+            logger.warning(f"HTTP {exc.status_code}: {exc.detail} - {request.url}")
+        except:
+            print(f"HTTP {exc.status_code}: {exc.detail} - {request.url}")
         
         return JSONResponse(
             status_code=exc.status_code,
@@ -285,7 +330,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """Handle request validation errors"""
-        logger.warning(f"Validation error: {exc.errors()} - {request.url}")
+        try:
+            logger = get_logger(__name__)
+            logger.warning(f"Validation error: {exc.errors()} - {request.url}")
+        except:
+            print(f"Validation error: {exc.errors()} - {request.url}")
         
         return JSONResponse(
             status_code=400,
@@ -306,7 +355,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         """Handle unexpected exceptions"""
-        logger.error(f"Unexpected error: {exc} - {request.url}")
+        try:
+            logger = get_logger(__name__)
+            logger.error(f"Unexpected error: {exc} - {request.url}")
+        except:
+            print(f"Unexpected error: {exc} - {request.url}")
         
         settings = get_settings()
         error_detail = str(exc) if settings.is_development() else "Internal server error"
@@ -421,7 +474,11 @@ def register_health_endpoints(app: FastAPI) -> None:
                     }
                 }
         except Exception as e:
-            logger.error(f"Services health check failed: {e}")
+            try:
+                logger = get_logger(__name__)
+                logger.error(f"Services health check failed: {e}")
+            except:
+                print(f"Services health check failed: {e}")
             return JSONResponse(
                 status_code=500,
                 content={
@@ -459,7 +516,11 @@ def register_health_endpoints(app: FastAPI) -> None:
             )
             
         except Exception as e:
-            logger.error(f"Integration test failed: {e}")
+            try:
+                logger = get_logger(__name__)
+                logger.error(f"Integration test failed: {e}")
+            except:
+                print(f"Integration test failed: {e}")
             return JSONResponse(
                 status_code=500,
                 content={
@@ -532,6 +593,9 @@ def run_dev_server():
     """Run development server"""
     settings = get_settings()
     
+    # Initialize logging before using logger
+    setup_logging(settings.environment.lower())
+    logger = get_logger(__name__)
     logger.info("Starting development server...")
     
     uvicorn.run(
@@ -552,6 +616,9 @@ def run_production_server():
     if not settings.is_production():
         raise RuntimeError("Production server should only be used in production environment")
     
+    # Initialize logging before using logger
+    setup_logging(settings.environment.lower())
+    logger = get_logger(__name__)
     logger.info("Starting production server...")
     
     # This would typically be called via gunicorn command line

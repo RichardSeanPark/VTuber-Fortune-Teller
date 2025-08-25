@@ -1,0 +1,36 @@
+# Phase 8.1 Multi-Provider TTS System Requirements
+# Install with: pip install -r requirements-tts.txt
+
+# Core TTS Dependencies
+edge-tts>=6.1.0              # Microsoft Edge TTS (primary free provider)
+aiohttp>=3.8.0               # HTTP client for API-based providers
+aiofiles>=23.0.0             # Async file operations
+
+# Optional Provider Dependencies
+# Uncomment and install as needed:
+
+# Azure Cognitive Services TTS (paid provider)
+# azure-cognitiveservices-speech>=1.34.0
+
+# OpenAI TTS (paid provider) 
+# openai>=1.0.0
+
+# Audio Processing (for enhanced lip sync)
+# librosa>=0.10.0            # Audio analysis (optional)
+# soundfile>=0.12.0          # Audio file handling (optional)
+
+# Development and Testing
+pytest>=7.0.0                # Unit testing
+pytest-asyncio>=0.21.0       # Async testing support
+pytest-mock>=3.10.0          # Mocking for tests
+httpx>=0.24.0                # HTTP client for testing
+
+# Performance and Monitoring
+psutil>=5.9.0                # System monitoring
+memory-profiler>=0.60.0      # Memory profiling (optional)
+
+# Existing project dependencies (already in main requirements)
+# fastapi>=0.100.0
+# pydantic>=2.0.0
+# python-multipart>=0.0.6
+# uvicorn[standard]>=0.23.0

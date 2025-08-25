@@ -111,6 +111,49 @@ class Live2DSettings(BaseModel):
     }
 
 
+class TTSSettings(BaseModel):
+    """TTS (Text-to-Speech) configuration settings"""
+    
+    # TTS system enabled
+    tts_enabled: bool = Field(default=True)
+    
+    # Default TTS settings
+    default_language: str = Field(default="ko-KR")
+    default_voice: str = Field(default="ko-KR-SunHiNeural")
+    default_speed: float = Field(default=1.0)
+    default_pitch: float = Field(default=1.0)
+    default_volume: float = Field(default=1.0)
+    
+    # Provider configuration
+    preferred_provider: str = Field(default="edge_tts")
+    fallback_enabled: bool = Field(default=True)
+    fallback_chain: List[str] = Field(default_factory=lambda: ["edge_tts", "siliconflow_tts", "azure_tts", "openai_tts"])
+    
+    # Provider API keys (optional)
+    siliconflow_api_key: Optional[str] = Field(default=None)
+    siliconflow_api_url: Optional[str] = Field(default=None)
+    azure_api_key: Optional[str] = Field(default=None)
+    azure_region: Optional[str] = Field(default=None)
+    openai_api_key: Optional[str] = Field(default=None)
+    openai_base_url: Optional[str] = Field(default=None)
+    
+    # Live2D integration
+    lipsync_enabled: bool = Field(default=True)
+    expressions_enabled: bool = Field(default=True)
+    motions_enabled: bool = Field(default=True)
+    
+    # Performance settings
+    cache_enabled: bool = Field(default=True)
+    cache_max_size: int = Field(default=100)
+    cache_ttl_hours: int = Field(default=24)
+    rate_limiting_enabled: bool = Field(default=True)
+    
+    # Audio settings
+    audio_format: str = Field(default="mp3")
+    sample_rate: int = Field(default=24000)
+    max_text_length: int = Field(default=5000)
+
+
 class FortuneSettings(BaseModel):
     """Fortune generation configuration settings"""
     
@@ -226,6 +269,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     security: SecuritySettings = Field(default_factory=SecuritySettings)
     live2d: Live2DSettings = Field(default_factory=Live2DSettings)
+    tts: TTSSettings = Field(default_factory=TTSSettings)
     fortune: FortuneSettings = Field(default_factory=FortuneSettings)
     server: ServerSettings = Field(default_factory=ServerSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)

@@ -156,6 +156,49 @@ def _standardize_zodiac_response(fortune_result: Dict[str, Any]) -> Dict[str, An
     }
 
 
+def _standardize_oriental_response(fortune_result: Dict[str, Any]) -> Dict[str, Any]:
+    """사주 운세 응답을 프론트엔드 호환 형식으로 변환"""
+    content = fortune_result.get("content", {})
+    saju_info = content.get("saju_info", {})
+    fortune_categories = content.get("fortune", {})
+    
+    # 메시지 우선순위: interpretation > advice > 기본 메시지
+    message = (
+        fortune_result.get("interpretation") or
+        content.get("advice") or
+        "사주를 통해 당신의 운세를 알아보았습니다. 오늘은 특별한 의미가 있는 날이 될 것 같아요!"
+    )
+    
+    # 사주 요소들 표준화
+    pillars = content.get("pillars", [])
+    if not pillars and saju_info:
+        # saju_info에서 사주 정보 추출
+        pillars = [
+            saju_info.get("year_pillar", {"heavenly_stem": "갑", "earthly_branch": "자"}),
+            saju_info.get("month_pillar", {"heavenly_stem": "을", "earthly_branch": "축"}),
+            saju_info.get("day_pillar", {"heavenly_stem": "병", "earthly_branch": "인"}),
+            saju_info.get("hour_pillar", {"heavenly_stem": "정", "earthly_branch": "묘"})
+        ]
+    
+    return {
+        "type": "oriental",
+        "fortune_id": fortune_result.get("fortune_id", ""),
+        "score": content.get("overall_score", 75),
+        "message": message,
+        "pillars": pillars,
+        "elements": content.get("elements", ["목", "화", "토", "금", "수"]),
+        "balance": content.get("balance", "균형"),
+        "strengths": content.get("strengths") or saju_info.get("strengths", ["인내력", "추진력"]),
+        "weaknesses": content.get("weaknesses") or saju_info.get("weaknesses", ["급함", "변덕"]),
+        "luckyColors": content.get("lucky_colors", ["초록", "갈색"]),
+        "luckyNumbers": content.get("lucky_numbers", [3, 8]),
+        "advice": content.get("advice", "꾸준함이 성공의 열쇠입니다."),
+        "live2d_emotion": fortune_result.get("live2d_emotion", "wise"),
+        "live2d_motion": fortune_result.get("live2d_motion", "meditation"),
+        "created_at": fortune_result.get("created_at", datetime.now().isoformat())
+    }
+
+
 def _get_tarot_emoji(card_name: str) -> str:
     """타로 카드 이름에 따른 이모지 반환"""
     emoji_map = {
@@ -1047,6 +1090,277 @@ async def fortune_health_check():
                 "error": {
                     "code": "SERVICE_UNHEALTHY",
                     "message": "운세 서비스가 정상적으로 작동하지 않습니다",
+                    "details": str(e)
+                }
+            }
+        )
+
+
+# ===== New Cerebras AI LLM Integration Endpoints =====
+
+class AIFortuneRequest(BaseModel):
+    """AI 운세 생성 요청"""
+    user_data: Optional[Dict[str, Any]] = Field(default={}, description="사용자 정보")
+    question: Optional[str] = Field(default="", description="질문 (타로의 경우)")
+    question_type: Optional[str] = Field(default="general", description="질문 유형")
+    birth_date: Optional[str] = Field(default=None, description="생년월일 (YYYY-MM-DD)")
+    birth_time: Optional[str] = Field(default=None, description="출생 시간 (HH:MM)")
+    zodiac_sign: Optional[str] = Field(default=None, description="별자리")
+    period: Optional[str] = Field(default="daily", description="기간 (daily/weekly/monthly)")
+    force_regenerate: Optional[bool] = Field(default=False, description="강제 재생성")
+
+
+@router.post("/ai/daily",
+           summary="AI 일일 운세 생성",
+           description="Cerebras AI를 활용한 개인화된 일일 운세 생성")
+@limiter.limit("60/minute")
+async def generate_ai_daily_fortune(
+    request: Request,
+    fortune_request: AIFortuneRequest,
+    db: Session = Depends(get_db)
+):
+    """AI 일일 운세 생성"""
+    try:
+        # 사용자 데이터 처리
+        user_data = fortune_request.user_data.copy()
+        if fortune_request.birth_date:
+            user_data["birth_date"] = fortune_request.birth_date
+        if fortune_request.zodiac_sign:
+            user_data["zodiac_sign"] = fortune_request.zodiac_sign
+        
+        # AI 운세 생성
+        result = await fortune_service.get_ai_fortune(
+            db=db,
+            fortune_type=FortuneType.DAILY,
+            user_data=user_data,
+            additional_params={},
+            force_regenerate=fortune_request.force_regenerate
+        )
+        
+        return _standardize_daily_response(result)
+        
+    except Exception as e:
+        logger.error(f"AI daily fortune generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "AI_GENERATION_FAILED",
+                "message": "AI 일일 운세 생성에 실패했습니다",
+                "details": str(e)
+            }
+        )
+
+
+@router.post("/ai/tarot",
+           summary="AI 타로 운세 생성", 
+           description="Cerebras AI를 활용한 개인화된 타로 운세 생성")
+@limiter.limit("60/minute")
+async def generate_ai_tarot_fortune(
+    request: Request,
+    fortune_request: AIFortuneRequest,
+    db: Session = Depends(get_db)
+):
+    """AI 타로 운세 생성"""
+    try:
+        # 사용자 데이터 처리
+        user_data = fortune_request.user_data.copy()
+        if fortune_request.birth_date:
+            user_data["birth_date"] = fortune_request.birth_date
+        if fortune_request.zodiac_sign:
+            user_data["zodiac_sign"] = fortune_request.zodiac_sign
+        
+        # 추가 매개변수
+        additional_params = {
+            "question": fortune_request.question or "",
+            "question_type": fortune_request.question_type or "general"
+        }
+        
+        # AI 운세 생성
+        result = await fortune_service.get_ai_fortune(
+            db=db,
+            fortune_type=FortuneType.TAROT,
+            user_data=user_data,
+            additional_params=additional_params,
+            force_regenerate=fortune_request.force_regenerate
+        )
+        
+        return _standardize_tarot_response(result)
+        
+    except Exception as e:
+        logger.error(f"AI tarot fortune generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "AI_GENERATION_FAILED", 
+                "message": "AI 타로 운세 생성에 실패했습니다",
+                "details": str(e)
+            }
+        )
+
+
+@router.post("/ai/zodiac",
+           summary="AI 별자리 운세 생성",
+           description="Cerebras AI를 활용한 개인화된 별자리 운세 생성")
+@limiter.limit("60/minute")
+async def generate_ai_zodiac_fortune(
+    request: Request,
+    fortune_request: AIFortuneRequest,
+    db: Session = Depends(get_db)
+):
+    """AI 별자리 운세 생성"""
+    try:
+        # 별자리 유효성 검사
+        if not fortune_request.zodiac_sign:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "MISSING_ZODIAC_SIGN",
+                    "message": "별자리 정보가 필요합니다"
+                }
+            )
+        
+        # 사용자 데이터 처리
+        user_data = fortune_request.user_data.copy()
+        user_data["zodiac_sign"] = fortune_request.zodiac_sign
+        if fortune_request.birth_date:
+            user_data["birth_date"] = fortune_request.birth_date
+        
+        # 추가 매개변수
+        additional_params = {
+            "period": fortune_request.period or "daily"
+        }
+        
+        # AI 운세 생성
+        result = await fortune_service.get_ai_fortune(
+            db=db,
+            fortune_type=FortuneType.ZODIAC,
+            user_data=user_data,
+            additional_params=additional_params,
+            force_regenerate=fortune_request.force_regenerate
+        )
+        
+        return _standardize_zodiac_response(result)
+        
+    except Exception as e:
+        logger.error(f"AI zodiac fortune generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "AI_GENERATION_FAILED",
+                "message": "AI 별자리 운세 생성에 실패했습니다",
+                "details": str(e)
+            }
+        )
+
+
+@router.post("/ai/saju",
+           summary="AI 사주 운세 생성",
+           description="Cerebras AI를 활용한 개인화된 사주 운세 생성") 
+@limiter.limit("60/minute")
+async def generate_ai_saju_fortune(
+    request: Request,
+    fortune_request: AIFortuneRequest,
+    db: Session = Depends(get_db)
+):
+    """AI 사주 운세 생성"""
+    try:
+        # 생년월일 유효성 검사
+        if not fortune_request.birth_date:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "MISSING_BIRTH_DATE",
+                    "message": "생년월일 정보가 필요합니다"
+                }
+            )
+        
+        # 사용자 데이터 처리
+        user_data = fortune_request.user_data.copy()
+        user_data["birth_date"] = fortune_request.birth_date
+        if fortune_request.birth_time:
+            user_data["birth_time"] = fortune_request.birth_time
+        if fortune_request.zodiac_sign:
+            user_data["zodiac_sign"] = fortune_request.zodiac_sign
+        
+        # 추가 매개변수
+        additional_params = {
+            "birth_time": fortune_request.birth_time
+        }
+        
+        # AI 운세 생성
+        result = await fortune_service.get_ai_fortune(
+            db=db,
+            fortune_type=FortuneType.ORIENTAL,
+            user_data=user_data,
+            additional_params=additional_params,
+            force_regenerate=fortune_request.force_regenerate
+        )
+        
+        return _standardize_oriental_response(result)
+        
+    except Exception as e:
+        logger.error(f"AI saju fortune generation failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "AI_GENERATION_FAILED",
+                "message": "AI 사주 운세 생성에 실패했습니다",
+                "details": str(e)
+            }
+        )
+
+
+@router.get("/ai/status",
+           summary="AI 서비스 상태 확인",
+           description="Cerebras AI 통합 상태 및 설정 확인")
+async def ai_service_status():
+    """AI 서비스 상태 확인"""
+    try:
+        from ..config.cerebras_config import is_cerebras_enabled, validate_cerebras_config, cerebras_settings
+        
+        is_enabled = is_cerebras_enabled()
+        is_valid, validation_message = validate_cerebras_config()
+        
+        status_data = {
+            "cerebras_enabled": is_enabled,
+            "configuration_valid": is_valid,
+            "validation_message": validation_message,
+            "model": cerebras_settings.cerebras_model if is_enabled else None,
+            "max_tokens": cerebras_settings.cerebras_max_tokens if is_enabled else None,
+            "temperature": cerebras_settings.cerebras_temperature if is_enabled else None,
+            "timeout": cerebras_settings.cerebras_timeout if is_enabled else None,
+            "fallback_enabled": cerebras_settings.cerebras_fallback if is_enabled else None
+        }
+        
+        if is_enabled and is_valid:
+            status = "operational"
+        elif is_enabled and not is_valid:
+            status = "misconfigured"
+        else:
+            status = "disabled"
+        
+        return {
+            "success": True,
+            "data": {
+                "status": status,
+                "service": "cerebras_ai_integration",
+                "details": status_data
+            },
+            "metadata": {
+                "request_id": f"ai_status_{datetime.now().timestamp()}",
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"AI service status check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": {
+                    "code": "AI_SERVICE_ERROR",
+                    "message": "AI 서비스 상태 확인에 실패했습니다",
                     "details": str(e)
                 }
             }
