@@ -1,0 +1,205 @@
+:root {
+  /* VTuber 테마 색상 시스템 */
+  --primary-gradient: linear-gradient(135deg, #ff6b9d 0%, #c44fff 30%, #667eea 70%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --accent-color: #ff6b9d;
+  --accent-secondary: #4facfe;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --error-color: #dc3545;
+  
+  /* 텍스트 색상 (WCAG 2.1 AA 준수) */
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.95);
+  --text-muted: rgba(255, 255, 255, 0.85);
+  --text-subtle: rgba(255, 255, 255, 0.75);
+  --text-overlay: rgba(0, 0, 0, 0.9);
+  
+  /* 배경 색상 */
+  --bg-overlay-light: rgba(255, 255, 255, 0.15);
+  --bg-overlay-medium: rgba(255, 255, 255, 0.1);
+  --bg-overlay-dark: rgba(0, 0, 0, 0.2);
+  --bg-glass: rgba(255, 255, 255, 0.12);
+  
+  /* 테두리 */
+  --border-light: rgba(255, 255, 255, 0.25);
+  --border-medium: rgba(255, 255, 255, 0.3);
+  --border-accent: rgba(255, 107, 157, 0.4);
+  
+  /* 간격 시스템 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 24px;
+  --space-3xl: 32px;
+  
+  /* 글꼴 크기 */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  
+  /* 둥근 모서리 */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 50%;
+  
+  /* 그림자 */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.2);
+  
+  /* 블러 효과 */
+  --blur-sm: blur(4px);
+  --blur-md: blur(8px);
+  --blur-lg: blur(12px);
+  --blur-xl: blur(20px);
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--primary-gradient);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 글로벌 접근성 개선 */
+*:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+/* 스크린 리더 전용 텍스트 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 공통 글래스모피즘 클래스 */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-light);
+}
+
+/* 공통 버튼 스타일 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md) var(--space-xl);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  min-height: 44px; /* 접근성: 최소 터치 타겟 크기 */
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-secondary {
+  background: var(--bg-overlay-light);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-overlay-light);
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Legacy 호환성 스타일 */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.card {
+  background: var(--bg-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-light);
+}
+
+.button {
+  background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-secondary) 100%);
+  color: var(--text-primary);
+  border: none;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+  box-shadow: var(--shadow-md);
+}
+
+.button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.button:active {
+  transform: translateY(0);
+}
