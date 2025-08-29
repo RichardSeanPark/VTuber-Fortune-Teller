@@ -1,0 +1,76 @@
+[
+    {
+        "name": "mao_pro",
+        "description": "Mao Pro - Advanced Live2D character with full emotion support",
+        "url": "/live2d-models/mao_pro/runtime/mao_pro.model3.json",
+        "kScale": 0.5,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "kXOffset": 1150,
+        "idleMotionGroupName": "Idle",
+        "emotionMap": {
+            "neutral": 0,
+            "anger": 2,
+            "disgust": 2,
+            "fear": 1,
+            "joy": 3,
+            "smirk": 3,
+            "sadness": 1,
+            "surprise": 3,
+            "mystical": 0,
+            "thinking": 1
+        },
+        "tapMotions": {
+            "HitAreaHead": {
+                "": 1
+            },
+            "HitAreaBody": {
+                "": 1
+            }
+        },
+        "features": {
+            "expressions": 8,
+            "motions": 7,
+            "specialMotions": 3,
+            "physics": true,
+            "eyeTracking": true,
+            "lipSync": true
+        }
+    },
+    {
+        "name": "shizuku",
+        "description": "Shizuku - Classic Live2D character with basic emotion support",
+        "url": "/live2d-models/shizuku/runtime/shizuku.model3.json",
+        "kScale": 0.6,
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "kXOffset": 1000,
+        "idleMotionGroupName": "Idle",
+        "emotionMap": {
+            "neutral": 0,
+            "joy": 1,
+            "sadness": 2,
+            "anger": 3,
+            "surprise": 1,
+            "fear": 2,
+            "mystical": 0,
+            "thinking": 0
+        },
+        "tapMotions": {
+            "HitAreaHead": {
+                "": 0
+            },
+            "HitAreaBody": {
+                "": 0
+            }
+        },
+        "features": {
+            "expressions": 4,
+            "motions": 4,
+            "specialMotions": 0,
+            "physics": true,
+            "eyeTracking": false,
+            "lipSync": false
+        }
+    }
+]

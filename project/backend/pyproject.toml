@@ -1,0 +1,164 @@
+[project]
+name = "fortune-vtuber-backend"
+version = "1.0.0"
+description = "Live2D Fortune VTuber Backend Service"
+authors = [
+    {name = "Fortune VTuber Team", email = "dev@fortune-vtuber.com"}
+]
+requires-python = ">=3.10,<3.13"
+readme = "README.md"
+license = {text = "MIT"}
+
+dependencies = [
+    # Core FastAPI and ASGI
+    "fastapi[standard]>=0.115.8",
+    "uvicorn[standard]>=0.33.0",
+    # Database and ORM
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "aiosqlite>=0.20.0",
+    # Data validation and serialization
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    # Security and authentication
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.9",
+    # WebSocket support
+    "websockets>=12.0",
+    # HTTP client
+    "httpx>=0.24.0",
+    "aiohttp>=3.8.0",
+    # Utilities
+    "python-dateutil>=2.8.2",
+    "pytz>=2023.3",
+    "loguru>=0.7.0",
+    # Content filtering and NLP
+    "bleach>=6.1.0",
+    "langdetect>=1.0.9",
+    # Configuration
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.1",
+    # Development utilities
+    "rich>=13.7.0",
+    # Performance optimizations
+    "orjson>=3.9.0", # Fast JSON serialization
+    "cachetools>=5.3.0", # Advanced caching utilities
+    "slowapi>=0.1.9", # Rate limiting for FastAPI
+    "psutil>=5.9.0",
+    "numpy>=2.2.6",
+    "librosa>=0.11.0",
+    "edge-tts>=6.1.0",
+    "aiofiles>=23.0.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "memory-profiler>=0.60.0",
+    # AI/LLM providers
+    "cerebras-cloud-sdk>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.12.0",
+    "httpx>=0.27.0",
+    
+    # Code quality
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+    "black>=23.12.0",
+    
+    # Development tools
+    "pre-commit>=3.6.0",
+    "watchdog>=4.0.0",
+]
+
+ml = [
+    # Machine Learning for content filtering
+    "transformers>=4.36.0",
+    "torch>=2.1.0",
+    "scikit-learn>=1.3.0",
+    "numpy>=1.24.0",
+]
+
+production = [
+    # Production monitoring
+    "prometheus-client>=0.19.0",
+    "sentry-sdk[fastapi]>=1.40.0",
+    
+    # Performance
+    "gunicorn>=21.2.0",
+    "orjson>=3.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fortune_vtuber"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["B011", "B018"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "security: marks tests as security tests",
+]
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "tests/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/__pycache__/*"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
