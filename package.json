@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@pixi/core": "^7.4.3",
+    "@pixi/display": "^7.4.3",
+    "@pixi/utils": "^7.4.3",
+    "ws": "^8.18.3"
+  }
+}
